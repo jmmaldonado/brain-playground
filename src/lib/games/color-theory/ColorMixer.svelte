@@ -3,6 +3,12 @@
     import { onMount } from 'svelte';
     import { Trophy, RefreshCw } from 'lucide-svelte';
 
+    interface Props {
+        embedded?: boolean;
+        onScore?: (points: number) => void;
+    }
+    let { embedded = false, onScore }: Props = $props();
+
     interface GameState {
         score: number;
         highScore: number;
@@ -57,16 +63,22 @@
 
         if (matchPercentage >= 95) {
             feedback = 'Perfect Match! 🎨';
-            gameState.score += 100;
+            const points = 100;
+            gameState.score += points;
+            if (onScore) onScore(points);
         } else if (matchPercentage >= 90) {
             feedback = 'Excellent! 🌟';
-            gameState.score += 50;
-        } else if (matchPercentage >= 80) {
-            feedback = 'Great Job! 👍';
-            gameState.score += 25;
+            const points = 50;
+            gameState.score += points;
+            if (onScore) onScore(points);
+        } else if (matchPercentage >= 85) {
+            feedback = 'Getting closer! 👍';
+            const points = 10;
+            gameState.score += points;
+            if (onScore) onScore(points);
         } else {
             feedback = 'Keep Trying! 💪';
-            gameState.score += 5;
+            gameState.score += 0;
         }
 
         if (gameState.score > gameState.highScore) {
@@ -78,6 +90,7 @@
 
 <div class="max-w-2xl mx-auto space-y-8">
     <!-- Header -->
+    {#if !embedded}
     <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
         <div class="flex items-center gap-2 text-purple-600 font-bold">
             <Trophy size={20} />
@@ -85,10 +98,11 @@
         </div>
         <div class="text-sm text-gray-500">Best: {gameState.highScore}</div>
     </div>
+    {/if}
 
     <div class="flex flex-row justify-center gap-4 md:gap-8">
         <!-- Target Color -->
-        <div class="bg-white p-4 md:p-6 rounded-2xl shadow-lg flex flex-col items-center gap-2 md:gap-4 flex-1 max-w-[200px]">
+        <div class="{embedded ? '' : 'bg-white shadow-lg rounded-2xl'} p-4 md:p-6 flex flex-col items-center gap-2 md:gap-4 flex-1 max-w-[200px]">
             <h2 class="text-sm md:text-xl font-bold text-gray-700">Target</h2>
             <div 
                 class="w-20 h-20 md:w-32 md:h-32 rounded-full shadow-inner border-4 border-gray-100"
@@ -97,7 +111,7 @@
         </div>
 
         <!-- User Color -->
-        <div class="bg-white p-4 md:p-6 rounded-2xl shadow-lg flex flex-col items-center gap-2 md:gap-4 flex-1 max-w-[200px]">
+        <div class="{embedded ? '' : 'bg-white shadow-lg rounded-2xl'} p-4 md:p-6 flex flex-col items-center gap-2 md:gap-4 flex-1 max-w-[200px]">
             <h2 class="text-sm md:text-xl font-bold text-gray-700">Your Mix</h2>
             <div 
                 class="w-20 h-20 md:w-32 md:h-32 rounded-full shadow-inner border-4 border-gray-100"
@@ -115,7 +129,7 @@
     </div>
 
     <!-- Controls -->
-    <div class="bg-white p-8 rounded-2xl shadow-lg space-y-6">
+    <div class="{embedded ? '' : 'bg-white shadow-lg rounded-2xl'} p-4 md:p-8 space-y-6">
         <!-- Red Slider -->
         <div class="space-y-2">
             <div class="flex justify-between text-sm font-bold text-red-500">

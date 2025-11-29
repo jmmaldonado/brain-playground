@@ -11,20 +11,12 @@
 			color: 'bg-green-100 text-green-600',
             href: '/games/math-game'
 		},
-		{
-			id: 'color-mixer',
-			title: 'Color Mixer',
-			description: 'Mix red, green, and blue to make new colors!',
-			icon: Palette,
-			color: 'bg-purple-100 text-purple-600',
-             href: '/games/color-mixer'
-		},
         {
             id: 'color-theory',
             title: 'Chromatic Academy',
-            description: 'Learn how mixing works and find opposing colors!',
+            description: 'Master color theory: Mixing, Harmony, and Matching!',
             icon: Palette,
-            color: 'bg-pink-100 text-pink-600',
+            color: 'bg-purple-100 text-purple-600', // Changed color to purple to match the old mixer vibe
             href: '/games/color-theory'
         }
 	];
