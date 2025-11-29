@@ -88,7 +88,7 @@
     }
 </script>
 
-<div class="max-w-2xl mx-auto space-y-8">
+<div class="max-w-2xl mx-auto sm:space-y-2 space-y-8">
     <!-- Header -->
     {#if !embedded}
     <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
@@ -117,71 +117,71 @@
                 class="w-20 h-20 md:w-32 md:h-32 rounded-full shadow-inner border-4 border-gray-100"
                 style="background-color: rgb({userColor.r}, {userColor.g}, {userColor.b})"
             ></div>
-            {#if showResult}
-                <div class="text-center animate-fade-in absolute md:static top-1/2 left-1/2 md:transform-none transform -translate-x-1/2 -translate-y-1/2 md:translate-0 bg-white/90 md:bg-transparent p-2 rounded-xl shadow-xl md:shadow-none z-10 w-48 md:w-auto">
-                    <p class="text-xl md:text-2xl font-bold {matchPercentage >= 90 ? 'text-green-500' : 'text-blue-500'}">
-                        {matchPercentage}%
-                    </p>
-                    <p class="text-sm md:text-base text-gray-600 font-medium">{feedback}</p>
-                </div>
-            {/if}
         </div>
     </div>
 
     <!-- Controls -->
-    <div class="{embedded ? '' : 'bg-white shadow-lg rounded-2xl'} p-4 md:p-8 space-y-6">
-        <!-- Red Slider -->
-        <div class="space-y-2">
-            <div class="flex justify-between text-sm font-bold text-red-500">
-                <label for="red">Red</label>
-                <span>{userColor.r}</span>
-            </div>
-            <input 
-                type="range" 
-                id="red" 
-                min="0" 
-                max="255" 
-                bind:value={userColor.r}
-                disabled={showResult}
-                class="w-full h-3 bg-red-100 rounded-lg appearance-none cursor-pointer accent-red-500"
-            />
-        </div>
+    <div class="{embedded ? '' : 'bg-white shadow-lg rounded-2xl'} p-2 md:p-8 space-y-6 flex flex-col justify-center items-center relative min-h-[250px]">
+        {#if !showResult}
+            <div class="w-full space-y-4">
+                <!-- Red Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm font-bold text-red-500">
+                        <label for="red">Red</label>
+                        <span>{userColor.r}</span>
+                    </div>
+                    <input 
+                        type="range" 
+                        id="red" 
+                        min="0" 
+                        max="255" 
+                        bind:value={userColor.r}
+                        class="w-full h-3 bg-red-100 rounded-lg appearance-none cursor-pointer accent-red-500"
+                    />
+                </div>
 
-        <!-- Green Slider -->
-        <div class="space-y-2">
-            <div class="flex justify-between text-sm font-bold text-green-500">
-                <label for="green">Green</label>
-                <span>{userColor.g}</span>
-            </div>
-            <input 
-                type="range" 
-                id="green" 
-                min="0" 
-                max="255" 
-                bind:value={userColor.g}
-                disabled={showResult}
-                class="w-full h-3 bg-green-100 rounded-lg appearance-none cursor-pointer accent-green-500"
-            />
-        </div>
+                <!-- Green Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm font-bold text-green-500">
+                        <label for="green">Green</label>
+                        <span>{userColor.g}</span>
+                    </div>
+                    <input 
+                        type="range" 
+                        id="green" 
+                        min="0" 
+                        max="255" 
+                        bind:value={userColor.g}
+                        class="w-full h-3 bg-green-100 rounded-lg appearance-none cursor-pointer accent-green-500"
+                    />
+                </div>
 
-        <!-- Blue Slider -->
-        <div class="space-y-2">
-            <div class="flex justify-between text-sm font-bold text-blue-500">
-                <label for="blue">Blue</label>
-                <span>{userColor.b}</span>
+                <!-- Blue Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm font-bold text-blue-500">
+                        <label for="blue">Blue</label>
+                        <span>{userColor.b}</span>
+                    </div>
+                    <input 
+                        type="range" 
+                        id="blue" 
+                        min="0" 
+                        max="255" 
+                        bind:value={userColor.b}
+                        class="w-full h-3 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                </div>
             </div>
-            <input 
-                type="range" 
-                id="blue" 
-                min="0" 
-                max="255" 
-                bind:value={userColor.b}
-                disabled={showResult}
-                class="w-full h-3 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            />
-        </div>
+        {:else}
+            <div class="text-center animate-fade-in my-8">
+                <p class="text-4xl font-extrabold {matchPercentage >= 90 ? 'text-green-500' : 'text-blue-500'} mb-2">
+                    {matchPercentage}%
+                </p>
+                <p class="text-xl text-gray-600 font-medium">{feedback}</p>
+            </div>
+        {/if}
 
-        <div class="pt-4">
+        <div class="pt-4 w-full">
             {#if !showResult}
                 <button 
                     onclick={checkMatch}

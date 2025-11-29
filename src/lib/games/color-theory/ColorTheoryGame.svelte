@@ -90,18 +90,18 @@
 
     <!-- Menu -->
     {#if mode === null}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+        <div class="grid grid-cols-2 md:grid-cols-2 gap-3 sm:gap-6 pt-4">
             <button
                 onclick={() => setMode('mixing')}
-                class="bg-white p-8 rounded-2xl shadow-md hover:shadow-xl transition-all hover:-translate-y-1 text-center space-y-4 border-2 border-transparent hover:border-purple-200"
+                class="bg-white p-4 sm:p-6 rounded-2xl shadow-md hover:shadow-xl transition-all hover:-translate-y-1 text-center space-y-2 sm:space-y-4 border-2 border-transparent hover:border-purple-200"
             >
-                <div class="w-20 h-20 mx-auto bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
-                    <Zap size={40} />
+                <div class="w-12 h-12 sm:w-20 sm:h-20 mx-auto bg-purple-100 rounded-full flex items-center justify-center text-purple-600 mb-2 sm:mb-4">
+                    <Zap class="w-6 h-6 sm:w-10 sm:h-10" />
                 </div>
                 <div>
-                    <h3 class="text-2xl font-bold text-gray-800">Mixing Lab</h3>
-                    <p class="text-gray-500 mt-2">Mix primary colors to create new ones!</p>
-                    <div class="mt-3 inline-block bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">
+                    <h3 class="text-lg sm:text-2xl font-bold text-gray-800 leading-tight">Mixing Lab</h3>
+                    <p class="text-xs sm:text-base text-gray-500 mt-1 sm:mt-2 line-clamp-3 sm:line-clamp-none">Mix primary colors to create new ones!</p>
+                    <div class="mt-2 sm:mt-3 inline-block bg-purple-100 text-purple-700 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-bold">
                         Score: {gameState.mixingScore}
                     </div>
                 </div>
@@ -109,15 +109,15 @@
 
             <button
                 onclick={() => setMode('harmony')}
-                class="bg-white p-8 rounded-2xl shadow-md hover:shadow-xl transition-all hover:-translate-y-1 text-center space-y-4 border-2 border-transparent hover:border-blue-200"
+                class="bg-white p-4 sm:p-6 rounded-2xl shadow-md hover:shadow-xl transition-all hover:-translate-y-1 text-center space-y-2 sm:space-y-4 border-2 border-transparent hover:border-blue-200"
             >
-                <div class="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                    <span class="text-4xl">☯️</span>
+                <div class="w-12 h-12 sm:w-20 sm:h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-2 sm:mb-4">
+                    <span class="text-xl sm:text-4xl">☯️</span>
                 </div>
                 <div>
-                    <h3 class="text-2xl font-bold text-gray-800">Harmony Wheel</h3>
-                    <p class="text-gray-500 mt-2">Find opposites and bring balance!</p>
-                    <div class="mt-3 inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">
+                    <h3 class="text-lg sm:text-2xl font-bold text-gray-800 leading-tight">Harmony Wheel</h3>
+                    <p class="text-xs sm:text-base text-gray-500 mt-1 sm:mt-2 line-clamp-3 sm:line-clamp-none">Find opposites and bring balance!</p>
+                    <div class="mt-2 sm:mt-3 inline-block bg-blue-100 text-blue-700 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-bold">
                         Score: {gameState.harmonyScore}
                     </div>
                 </div>
@@ -125,15 +125,15 @@
 
             <button
                 onclick={() => setMode('matcher')}
-                class="bg-white p-8 rounded-2xl shadow-md hover:shadow-xl transition-all hover:-translate-y-1 text-center space-y-4 border-2 border-transparent hover:border-green-200 md:col-span-2"
+                class="bg-white p-4 sm:p-6 rounded-2xl shadow-md hover:shadow-xl transition-all hover:-translate-y-1 text-center space-y-2 sm:space-y-4 border-2 border-transparent hover:border-green-200 col-span-2"
             >
-                <div class="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center text-green-600">
-                    <Sliders size={40} />
+                <div class="w-12 h-12 sm:w-20 sm:h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-2 sm:mb-4">
+                    <Sliders class="w-6 h-6 sm:w-10 sm:h-10" />
                 </div>
                 <div>
-                    <h3 class="text-2xl font-bold text-gray-800">Color Matcher</h3>
-                    <p class="text-gray-500 mt-2">Fine-tune your eyes by matching colors!</p>
-                    <div class="mt-3 inline-block bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                    <h3 class="text-lg sm:text-2xl font-bold text-gray-800 leading-tight">Color Matcher</h3>
+                    <p class="text-xs sm:text-base text-gray-500 mt-1 sm:mt-2 line-clamp-3 sm:line-clamp-none">Fine-tune your eyes by matching colors!</p>
+                    <div class="mt-2 sm:mt-3 inline-block bg-green-100 text-green-700 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-bold">
                         Score: {gameState.matcherScore}
                     </div>
                 </div>

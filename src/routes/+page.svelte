@@ -18,6 +18,14 @@
             href: '/games/math-game'
 		},
         {
+            id: 'math-fill',
+            title: 'Math Detectives',
+            description: 'Find the missing numbers or signs to solve the puzzle!',
+            icon: Calculator,
+            color: 'bg-blue-100 text-blue-600',
+            href: '/games/math-fill'
+        },
+        {
             id: 'color-theory',
             title: 'Chromatic Academy',
             description: 'Master color theory: Mixing, Harmony, and Matching!',
@@ -28,23 +36,18 @@
 	];
 </script>
 
-<div class="space-y-8">
-	<section class="text-center py-8">
-		<h1 class="text-4xl font-extrabold text-gray-800 mb-4">Welcome to Brain Playground!</h1>
-		<p class="text-xl text-gray-600">Choose a game to start playing and learning.</p>
-	</section>
-
-	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+<div class="space-y-4 sm:space-y-8">
+	<div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
 		{#each games as game}
 			<a
 				href={game.href}
-				class="block p-6 rounded-2xl shadow-lg bg-white hover:shadow-xl transition-shadow transform hover:-translate-y-1 border border-gray-100"
+				class="block p-4 sm:p-6 rounded-2xl shadow-md sm:shadow-lg bg-white hover:shadow-xl transition-shadow transform hover:-translate-y-1 border border-gray-100 flex flex-col items-center text-center"
 			>
-				<div class={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${game.color}`}>
-					<game.icon size={32} />
+				<div class={`w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mb-3 sm:mb-4 ${game.color}`}>
+					<game.icon class="w-6 h-6 sm:w-8 sm:h-8" />
 				</div>
-				<h2 class="text-2xl font-bold text-gray-800 mb-2">{game.title}</h2>
-				<p class="text-gray-600">{game.description}</p>
+				<h2 class="text-lg sm:text-2xl font-bold text-gray-800 mb-1 sm:mb-2 leading-tight">{game.title}</h2>
+				<p class="text-xs sm:text-base text-gray-600 line-clamp-3 sm:line-clamp-none">{game.description}</p>
 			</a>
 		{/each}
 	</div>
