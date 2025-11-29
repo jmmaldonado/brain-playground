@@ -48,21 +48,23 @@
     startRound();
 </script>
 
-<div class="flex flex-col items-center gap-8 max-w-lg mx-auto p-4">
-    <div class="text-center space-y-2">
-        <h2 class="text-2xl font-bold text-gray-800">Harmony Wheel ☯️</h2>
-        <p class="text-gray-600 h-6">{message}</p>
+<div class="flex flex-col items-center gap-4 md:gap-8 max-w-lg mx-auto p-4 overflow-hidden">
+    <div class="text-center space-y-1 md:space-y-2">
+        <h2 class="text-xl md:text-2xl font-bold text-gray-800">Harmony Wheel ☯️</h2>
+        <p class="text-sm md:text-base text-gray-600 h-6">{message}</p>
     </div>
 
-    <div class="relative w-64 h-64">
-        <!-- Center Target -->
-        <div class="absolute inset-0 m-auto w-24 h-24 bg-white rounded-full z-20 flex items-center justify-center shadow-lg border-4"
-             style="border-color: {targetColor.hex}">
-             <div class="text-center">
-                 <span class="block text-xs text-gray-400 font-bold uppercase">Find</span>
-                 <span class="block font-bold" style="color: {targetColor.hex}">Opposite</span>
-             </div>
-        </div>
+    <!-- Container with scale for mobile -->
+    <div class="transform scale-[0.65] sm:scale-75 md:scale-100 origin-center">
+        <div class="relative w-64 h-64">
+            <!-- Center Target -->
+            <div class="absolute inset-0 m-auto w-24 h-24 bg-white rounded-full z-20 flex items-center justify-center shadow-lg border-4"
+                 style="border-color: {targetColor.hex}">
+                 <div class="text-center">
+                     <span class="block text-xs text-gray-400 font-bold uppercase">Find</span>
+                     <span class="block font-bold" style="color: {targetColor.hex}">Opposite</span>
+                 </div>
+            </div>
 
         <!-- Wheel Segments -->
         <div class="w-full h-full rounded-full overflow-hidden relative shadow-2xl border-4 border-white">
@@ -100,6 +102,7 @@
                  <!-- Ideally we'd draw a line here, but simple UI feedback is enough for now -->
             {/if}
         </div>
+    </div>
     </div>
     
     <div class="mt-12 p-4 bg-blue-50 rounded-xl text-sm text-blue-800 max-w-xs text-center">

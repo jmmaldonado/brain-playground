@@ -70,14 +70,14 @@
     startRound();
 </script>
 
-<div class="flex flex-col items-center gap-8 max-w-lg mx-auto p-4">
-    <div class="text-center space-y-2">
-        <h2 class="text-2xl font-bold text-gray-800">Mixing Lab 🧪</h2>
-        <p class="text-gray-600 h-6">{message}</p>
+<div class="flex flex-col items-center gap-4 md:gap-8 max-w-lg mx-auto p-4">
+    <div class="text-center space-y-1 md:space-y-2">
+        <h2 class="text-xl md:text-2xl font-bold text-gray-800">Mixing Lab 🧪</h2>
+        <p class="text-sm md:text-base text-gray-600 h-6">{message}</p>
     </div>
 
     <!-- The Cauldron / Mix Result -->
-    <div class="relative w-48 h-48 flex items-center justify-center">
+    <div class="relative w-32 h-32 md:w-48 md:h-48 flex items-center justify-center">
         <!-- Beaker Container -->
         <div class="absolute inset-0 bg-gray-200 rounded-full border-4 border-gray-300 shadow-inner overflow-hidden">
              <!-- Liquid -->
@@ -93,19 +93,19 @@
         </div>
 
         <!-- Target Hint (Floating above) -->
-        <div class="absolute -top-4 -right-4 bg-white p-2 rounded-full shadow-lg border border-gray-100 z-10">
-            <div class="text-xs text-gray-500 font-bold mb-1 text-center">Make</div>
+        <div class="absolute -top-2 -right-2 md:-top-4 md:-right-4 bg-white p-1.5 md:p-2 rounded-full shadow-lg border border-gray-100 z-10">
+            <div class="text-[10px] md:text-xs text-gray-500 font-bold mb-1 text-center">Make</div>
             <div 
-                class="w-12 h-12 rounded-full border-2 border-gray-100"
+                class="w-8 h-8 md:w-12 md:h-12 rounded-full border-2 border-gray-100"
                 style="background-color: {targetColor.hex}"
             ></div>
         </div>
         
-        <Beaker size={64} class="text-gray-400 z-10 opacity-20" />
+        <Beaker size={48} class="text-gray-400 z-10 opacity-20 md:w-16 md:h-16" />
     </div>
 
     <!-- Primary Colors (Ingredients) -->
-    <div class="flex gap-6 mt-8">
+    <div class="flex gap-4 md:gap-6 mt-4 md:mt-8">
         {#each Object.values(COLORS).filter(c => c.type === 'primary') as color}
             <button
                 onclick={() => addColor(color.id)}
@@ -113,12 +113,10 @@
                 class="group relative flex flex-col items-center gap-2 transition-transform hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 <div 
-                    class="w-20 h-20 rounded-full shadow-lg border-4 border-white ring-2 ring-gray-100 transition-shadow group-hover:shadow-xl"
+                    class="w-14 h-14 md:w-20 md:h-20 rounded-full shadow-lg border-4 border-white ring-2 ring-gray-100 transition-shadow group-hover:shadow-xl"
                     style="background-color: {color.hex}"
                 ></div>
-                <span class="font-bold text-gray-700">{color.name}</span>
-                
-                <!-- Droplet Effect on Click (Simplified) -->
+                <span class="font-bold text-sm md:text-base text-gray-700">{color.name}</span>
             </button>
         {/each}
     </div>

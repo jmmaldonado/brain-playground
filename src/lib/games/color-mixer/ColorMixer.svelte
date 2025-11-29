@@ -86,30 +86,29 @@
         <div class="text-sm text-gray-500">Best: {gameState.highScore}</div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <div class="flex flex-row justify-center gap-4 md:gap-8">
         <!-- Target Color -->
-        <div class="bg-white p-6 rounded-2xl shadow-lg flex flex-col items-center gap-4">
-            <h2 class="text-xl font-bold text-gray-700">Target Color</h2>
+        <div class="bg-white p-4 md:p-6 rounded-2xl shadow-lg flex flex-col items-center gap-2 md:gap-4 flex-1 max-w-[200px]">
+            <h2 class="text-sm md:text-xl font-bold text-gray-700">Target</h2>
             <div 
-                class="w-32 h-32 rounded-full shadow-inner border-4 border-gray-100"
+                class="w-20 h-20 md:w-32 md:h-32 rounded-full shadow-inner border-4 border-gray-100"
                 style="background-color: rgb({targetColor.r}, {targetColor.g}, {targetColor.b})"
             ></div>
-            <p class="text-gray-400 text-sm">Match this color!</p>
         </div>
 
         <!-- User Color -->
-        <div class="bg-white p-6 rounded-2xl shadow-lg flex flex-col items-center gap-4">
-            <h2 class="text-xl font-bold text-gray-700">Your Mix</h2>
+        <div class="bg-white p-4 md:p-6 rounded-2xl shadow-lg flex flex-col items-center gap-2 md:gap-4 flex-1 max-w-[200px]">
+            <h2 class="text-sm md:text-xl font-bold text-gray-700">Your Mix</h2>
             <div 
-                class="w-32 h-32 rounded-full shadow-inner border-4 border-gray-100"
+                class="w-20 h-20 md:w-32 md:h-32 rounded-full shadow-inner border-4 border-gray-100"
                 style="background-color: rgb({userColor.r}, {userColor.g}, {userColor.b})"
             ></div>
             {#if showResult}
-                <div class="text-center animate-fade-in">
-                    <p class="text-2xl font-bold {matchPercentage >= 90 ? 'text-green-500' : 'text-blue-500'}">
-                        {matchPercentage}% Match
+                <div class="text-center animate-fade-in absolute md:static top-1/2 left-1/2 md:transform-none transform -translate-x-1/2 -translate-y-1/2 md:translate-0 bg-white/90 md:bg-transparent p-2 rounded-xl shadow-xl md:shadow-none z-10 w-48 md:w-auto">
+                    <p class="text-xl md:text-2xl font-bold {matchPercentage >= 90 ? 'text-green-500' : 'text-blue-500'}">
+                        {matchPercentage}%
                     </p>
-                    <p class="text-gray-600 font-medium">{feedback}</p>
+                    <p class="text-sm md:text-base text-gray-600 font-medium">{feedback}</p>
                 </div>
             {/if}
         </div>
