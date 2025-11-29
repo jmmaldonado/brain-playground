@@ -11,13 +11,12 @@
 			<a href="/" class="text-2xl font-bold flex items-center gap-2">
 				<Gamepad2 /> Brain Playground
 			</a>
-			<nav>
-                <!-- Place for global settings or links -->
-                <button class="p-2 hover:bg-blue-700 rounded-full" aria-label="Settings">
-                    <Settings size={20} />
-                </button>
-			</nav>
-		</div>
+			            <nav>
+			                <!-- Place for global settings or links -->
+			                <a href="/settings" class="p-2 hover:bg-blue-700 rounded-full inline-block text-white" aria-label="Settings">
+			                    <Settings size={20} />
+			                </a>
+						</nav>		</div>
 	</header>
 
 	<main class="flex-grow container mx-auto p-4">

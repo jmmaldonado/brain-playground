@@ -1,11 +1,11 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import { SvelteKitPWA } from 'vite-plugin-pwa';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
 	plugins: [
 		sveltekit(),
-		SvelteKitPWA({
+		VitePWA({
 			registerType: 'autoUpdate',
 			manifest: {
 				name: 'Brain Playground',
