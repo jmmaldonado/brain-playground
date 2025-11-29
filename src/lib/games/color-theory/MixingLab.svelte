@@ -22,6 +22,7 @@
         if (level >= 2) base.push('white', 'black');
         if (level >= 2) base.push('orange'); // Needed for Brown in L2
         if (level >= 3) base.push('green', 'purple');
+        if (level >= 4) base.push('brown'); // Needed for Beige in L4
         return base.map(id => COLORS[id]);
     });
 
@@ -87,7 +88,7 @@
     function checkLevelProgression() {
         // Simple progression: 3 correct in a row or just random chance after some success
         // Let's do: every 3 points on streak, try to level up if not max
-        if (streak % 3 === 0 && level < 3) {
+        if (streak % 3 === 0 && level < 4) {
             level++;
             showLevelUp = true;
             setTimeout(() => {
@@ -144,7 +145,7 @@
         </div>
 
         <!-- Target Hint (Floating above) -->
-        <div class="absolute -top-2 -right-2 md:-top-4 md:-right-4 bg-white p-1.5 md:p-2 rounded-full shadow-lg border border-gray-100 z-10 animate-pulse">
+        <div class="absolute -top-2 -right-2 md:-top-4 md:-right-4 bg-white p-1.5 md:p-2 rounded-full shadow-lg border border-gray-100 z-10">
             <div 
                 class="w-10 h-10 md:w-14 md:h-14 rounded-full border-2 border-gray-100 shadow-sm"
                 style="background-color: {targetColor.hex}"

@@ -1,5 +1,11 @@
 <script lang="ts">
 	import { Calculator, Palette } from 'lucide-svelte';
+    import { onMount } from 'svelte';
+    import { pageTitle } from '$lib/stores/app';
+
+    onMount(() => {
+        pageTitle.set('Brain Playground');
+    });
 
     // This will be populated dynamically later
 	let games = [

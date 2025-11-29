@@ -39,7 +39,16 @@ export const COLORS: Record<string, ColorDef> = {
     cream: { id: 'cream', name: 'Cream', hex: '#FEF3C7', type: 'tint' },
     gray: { id: 'gray', name: 'Gray', hex: '#9CA3AF', type: 'shade' },
     navy: { id: 'navy', name: 'Navy', hex: '#1E3A8A', type: 'shade' },
-    brown: { id: 'brown', name: 'Brown', hex: '#78350F', type: 'shade' } // Often Orange + Black
+    brown: { id: 'brown', name: 'Brown', hex: '#78350F', type: 'shade' }, // Often Orange + Black
+
+    // Complex Tints & Shades (Level 4)
+    peach: { id: 'peach', name: 'Peach', hex: '#FDBA74', type: 'tint' }, // Orange + White
+    lavender: { id: 'lavender', name: 'Lavender', hex: '#E9D5FF', type: 'tint' }, // Purple + White
+    mint: { id: 'mint', name: 'Mint', hex: '#86EFAC', type: 'tint' }, // Green + White
+    beige: { id: 'beige', name: 'Beige', hex: '#F5F5DC', type: 'tint' }, // Brown + White
+    maroon: { id: 'maroon', name: 'Maroon', hex: '#7F1D1D', type: 'shade' }, // Red + Black
+    forest: { id: 'forest', name: 'Forest', hex: '#064E3B', type: 'shade' }, // Green + Black
+    midnight: { id: 'midnight', name: 'Midnight', hex: '#172554', type: 'shade' }, // Blue + Black
 };
 
 export const MIXING_RECIPES = [
@@ -62,5 +71,14 @@ export const MIXING_RECIPES = [
     { inputs: ['green', 'yellow'], output: 'lime', level: 3 },
     { inputs: ['green', 'blue'], output: 'teal', level: 3 },
     { inputs: ['purple', 'blue'], output: 'indigo', level: 3 },
-    { inputs: ['purple', 'red'], output: 'magenta', level: 3 }
+    { inputs: ['purple', 'red'], output: 'magenta', level: 3 },
+
+    // Level 4: Complex Tints & Shades
+    { inputs: ['orange', 'white'], output: 'peach', level: 4 },
+    { inputs: ['purple', 'white'], output: 'lavender', level: 4 },
+    { inputs: ['green', 'white'], output: 'mint', level: 4 },
+    { inputs: ['brown', 'white'], output: 'beige', level: 4 },
+    { inputs: ['red', 'black'], output: 'maroon', level: 4 },
+    { inputs: ['green', 'black'], output: 'forest', level: 4 },
+    { inputs: ['blue', 'black'], output: 'midnight', level: 4 }
 ];
