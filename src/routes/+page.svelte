@@ -2,6 +2,7 @@
 	import { Calculator, Palette } from 'lucide-svelte';
     import { onMount } from 'svelte';
     import { pageTitle } from '$lib/stores/app';
+    import { base } from '$app/paths';
 
     onMount(() => {
         pageTitle.set('Brain Playground');
@@ -15,7 +16,7 @@
 			description: 'Practice addition, subtraction, and multiplication!',
 			icon: Calculator,
 			color: 'bg-green-100 text-green-600',
-            href: '/games/math-game'
+            href: `${base}/games/math-game`
 		},
         {
             id: 'math-fill',
@@ -23,7 +24,7 @@
             description: 'Find the missing numbers or signs to solve the puzzle!',
             icon: Calculator,
             color: 'bg-blue-100 text-blue-600',
-            href: '/games/math-fill'
+            href: `${base}/games/math-fill`
         },
         {
             id: 'color-theory',
@@ -31,7 +32,7 @@
             description: 'Master color theory: Mixing, Harmony, and Matching!',
             icon: Palette,
             color: 'bg-purple-100 text-purple-600', // Changed color to purple to match the old mixer vibe
-            href: '/games/color-theory'
+            href: `${base}/games/color-theory`
         }
 	];
 </script>

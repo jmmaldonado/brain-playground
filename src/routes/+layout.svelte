@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { Gamepad2, Settings, ArrowLeft } from 'lucide-svelte';
     import { pageTitle } from '$lib/stores/app';
+    import { base } from '$app/paths';
     
     let { children } = $props();
 </script>
@@ -11,7 +12,7 @@
 		<div class="container mx-auto flex justify-between items-center">
 			<div class="flex items-center gap-4">
                 {#if $pageTitle !== 'Brain Playground'}
-                    <a href="/" class="p-1 hover:bg-blue-700 rounded-full transition-colors" aria-label="Back to Home">
+                    <a href="{base}/" class="p-1 hover:bg-blue-700 rounded-full transition-colors" aria-label="Back to Home">
                         <ArrowLeft size={28} />
                     </a>
                 {:else}
@@ -23,7 +24,7 @@
             </div>
 			<nav>
                 <!-- Place for global settings or links -->
-                <a href="/settings" class="p-2 hover:bg-blue-700 rounded-full inline-block text-white" aria-label="Settings">
+                <a href="{base}/settings" class="p-2 hover:bg-blue-700 rounded-full inline-block text-white" aria-label="Settings">
                     <Settings size={20} />
                 </a>
 			</nav>

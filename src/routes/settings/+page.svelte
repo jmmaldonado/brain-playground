@@ -1,6 +1,7 @@
 <script lang="ts">
     import { StorageService } from '$lib/services/storage';
     import { ArrowLeft, Download, Upload, Trash2, CheckCircle, AlertCircle } from 'lucide-svelte';
+    import { base } from '$app/paths';
 
     let statusMsg = $state('');
     let statusType: 'success' | 'error' | '' = $state('');
@@ -55,7 +56,7 @@
 
 <div class="max-w-2xl mx-auto space-y-8">
     <div class="flex items-center gap-4">
-        <a href="/" class="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-600">
+        <a href="{base}/" class="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-600">
             <ArrowLeft size={24} />
         </a>
         <h1 class="text-3xl font-bold text-gray-800">Settings</h1>
