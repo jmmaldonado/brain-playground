@@ -18,7 +18,15 @@
 			icon: Palette,
 			color: 'bg-purple-100 text-purple-600',
              href: '/games/color-mixer'
-		}
+		},
+        {
+            id: 'color-theory',
+            title: 'Chromatic Academy',
+            description: 'Learn how mixing works and find opposing colors!',
+            icon: Palette,
+            color: 'bg-pink-100 text-pink-600',
+            href: '/games/color-theory'
+        }
 	];
 </script>
 
