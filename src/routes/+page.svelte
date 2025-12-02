@@ -41,6 +41,14 @@
             icon: Cpu,
             color: 'bg-indigo-100 text-indigo-600',
             href: `${base}/games/logic-gates`
+        },
+        {
+            id: 'logic-basics',
+            title: 'Logic Basics',
+            description: 'Experiment with switches, buttons, and light bulbs!',
+            icon: Cpu,
+            color: 'bg-yellow-100 text-yellow-600',
+            href: `${base}/games/logic-basics`
         }
 	];
 </script>
