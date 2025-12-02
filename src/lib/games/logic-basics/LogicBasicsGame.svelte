@@ -17,7 +17,7 @@
     let gateStates = $state<Record<string, boolean>>({});
     
     // Connection State
-    let selectedNode = $state<{ id: string, type: 'source' | 'sink', index?: number, x: number, y: number } | null>(null);
+    let selectedNode = $state<{ id: string, type: 'source' | 'sink', index?: number } | null>(null);
     let mouseX = $state(0);
     let mouseY = $state(0);
     let isLevelComplete = $state(false);
@@ -25,6 +25,13 @@
     let gameArea: HTMLDivElement | null = null;
     let dragOffsetX = 0;
     let dragOffsetY = 0;
+    
+    // Pan/Zoom State
+    let panX = $state(0);
+    let panY = $state(0);
+    let isPanning = $state(false);
+    let lastPanX = 0;
+    let lastPanY = 0;
 
     let currentLevel = $derived(levels[currentLevelIndex]);
 
@@ -137,8 +144,14 @@
         if (!gameArea) return;
         const rect = gameArea.getBoundingClientRect();
         const coords = getCoords(e);
-        mouseX = coords.clientX - rect.left;
-        mouseY = coords.clientY - rect.top;
+        
+        // Raw mouse position relative to canvas container
+        const rawX = coords.clientX - rect.left;
+        const rawY = coords.clientY - rect.top;
+
+        // Logical mouse position in the world (accounting for pan)
+        mouseX = rawX - panX;
+        mouseY = rawY - panY;
         
         if (draggingGateId) {
             e.preventDefault(); 
@@ -147,11 +160,36 @@
                 gate.x = mouseX - dragOffsetX;
                 gate.y = mouseY - dragOffsetY;
             }
+        } else if (isPanning) {
+            e.preventDefault();
+            const dx = coords.clientX - lastPanX;
+            const dy = coords.clientY - lastPanY;
+            panX += dx;
+            panY += dy;
+            lastPanX = coords.clientX;
+            lastPanY = coords.clientY;
+        }
+    }
+
+    function handlePointerDown(e: MouseEvent | TouchEvent) {
+         if (showSidebar && gameArea && !e.composedPath().some(el => (el as HTMLElement).classList?.contains('sidebar'))) {
+            showSidebar = false;
+        }
+        
+        // If clicking on background, start panning
+        if (e.target === gameArea || (e.target as Element).tagName === 'svg') {
+            selectedNode = null;
+            isPanning = true;
+            const coords = getCoords(e);
+            lastPanX = coords.clientX;
+            lastPanY = coords.clientY;
         }
     }
 
     function handlePointerUp() {
         draggingGateId = null;
+        isPanning = false;
+        
         // Also handle end of pulse if mouse up anywhere
         switches.forEach(s => {
             if (s.type === 'pulse' && s.state) {
@@ -162,39 +200,29 @@
     }
 
     // Connection Logic
-    function handleSourceClick(id: string, clientX: number, clientY: number) {
-        if (!gameArea) return;
-        const rect = gameArea.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-
+    function handleSourceClick(id: string) {
         if (selectedNode) {
             if (selectedNode.type === 'sink') {
                 createConnection(id, selectedNode.id, selectedNode.index || 0);
                 selectedNode = null;
             } else {
-                selectedNode = { id, type: 'source', x, y };
+                selectedNode = { id, type: 'source' };
             }
         } else {
-            selectedNode = { id, type: 'source', x, y };
+            selectedNode = { id, type: 'source' };
         }
     }
 
-    function handleSinkClick(id: string, index: number, clientX: number, clientY: number) {
-        if (!gameArea) return;
-        const rect = gameArea.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-
+    function handleSinkClick(id: string, index: number) {
         if (selectedNode) {
             if (selectedNode.type === 'source') {
                 createConnection(selectedNode.id, id, index);
                 selectedNode = null;
             } else {
-                selectedNode = { id, type: 'sink', index, x, y };
+                selectedNode = { id, type: 'sink', index };
             }
         } else {
-            selectedNode = { id, type: 'sink', index, x, y };
+            selectedNode = { id, type: 'sink', index };
         }
     }
 
@@ -207,6 +235,7 @@
     }
 
     // Helpers for rendering connections
+    // Helper to snap to grid if needed, or just return pos
     function getConnectorPos(id: string, isInput: boolean, index: number = 0): { x: number, y: number } {
         const sw = switches.find(s => s.id === id);
         if (sw) return { x: sw.x + 90, y: sw.y + 20 }; // Switch output
@@ -242,17 +271,7 @@
 
 </script>
 
-<div 
-    class="flex flex-col h-[calc(100vh-80px)] bg-slate-50 relative overflow-hidden"
-    onpointerdown={(e) => {
-         if (showSidebar && gameArea && !e.composedPath().some(el => (el as HTMLElement).classList?.contains('sidebar'))) {
-            showSidebar = false;
-        }
-        if (e.target === gameArea || (e.target as Element).tagName === 'svg') {
-            selectedNode = null;
-        }
-    }}
->
+<div class="flex flex-col h-[calc(100vh-80px)] bg-slate-50 relative overflow-hidden">
     <!-- Header -->
     <div class="bg-white border-b px-4 py-3 flex justify-between items-center shadow-sm z-10 sm:px-6 sm:py-4">
         <div class="flex items-center gap-2">
@@ -310,22 +329,26 @@
 
         <!-- Canvas -->
         <div 
-            class="flex-1 bg-slate-50 relative cursor-crosshair overflow-hidden"
+            class="flex-1 bg-slate-50 relative cursor-move overflow-hidden touch-none"
             bind:this={gameArea}
+            onpointerdown={handlePointerDown}
             onpointermove={updatePointerPos}
             onpointerup={handlePointerUp}
             onpointerleave={handlePointerUp}
         >
-             <!-- Grid Background -->
+             <!-- Grid Background (Static or Moving? Moving gives better feel of infinite canvas) -->
             <div class="absolute inset-0 opacity-10 pointer-events-none" 
-                 style="background-image: radial-gradient(#64748b 1px, transparent 1px); background-size: 20px 20px;">
+                 style="background-image: radial-gradient(#64748b 1px, transparent 1px); background-size: 20px 20px; background-position: {panX}px {panY}px;">
             </div>
+            
+            <!-- Panning Container -->
+            <div style="transform: translate({panX}px, {panY}px); width: 100%; height: 100%; pointer-events: none;">
 
             <!-- SVG Layer for Wires -->
-            <svg class="w-full h-full pointer-events-none absolute inset-0">
+            <svg class="w-full h-full pointer-events-none absolute inset-0 overflow-visible">
                 <defs>
-                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                        <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+                    <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+                        <polygon points="0 0, 6 2, 0 4" fill="#94a3b8" />
                     </marker>
                     <filter id="glow">
                         <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
@@ -365,21 +388,16 @@
 
                 <!-- Active Selection -->
                 {#if selectedNode}
-                    {@const pos = {x: selectedNode.x, y: selectedNode.y}}
-                    <path 
-                        d={`M ${pos.x} ${pos.y} C ${pos.x + (selectedNode.type === 'source' ? 50 : -50)} ${pos.y}, ${mouseX + (selectedNode.type === 'source' ? -50 : 50)} ${mouseY}, ${mouseX} ${mouseY}`}
-                        fill="none" 
-                        stroke={selectedNode.type === 'source' ? '#3b82f6' : '#ec4899'}
-                        stroke-width="2" 
-                        stroke-dasharray="5,5"
-                        class="opacity-60"
-                    />
+                    {@const pos = getConnectorPos(selectedNode.id, selectedNode.type === 'sink', selectedNode.index)}
+                    
+                    <!-- Highlight Ring (Subtle) -->
+                    <circle cx={pos.x} cy={pos.y} r="8" fill="none" stroke={selectedNode.type === 'source' ? '#3b82f6' : '#ec4899'} stroke-width="3" class="opacity-80" />
                 {/if}
             </svg>
             
             <!-- Components Layer -->
             <div class="absolute inset-0 w-full h-full pointer-events-none">
-                <svg class="w-full h-full">
+                <svg class="w-full h-full overflow-visible">
                     {#each switches as sw (sw.id)}
                          <SwitchComponent 
                             label={sw.label}
@@ -388,7 +406,7 @@
                             y={sw.y}
                             state={sw.state}
                             onToggle={() => startPulse(sw.id)}
-                            onOutputClick={(e) => handleSourceClick(sw.id, e.clientX, e.clientY)}
+                            onOutputClick={() => handleSourceClick(sw.id)}
                          />
                     {/each}
 
@@ -398,7 +416,7 @@
                             x={out.x}
                             y={out.y}
                             state={out.state}
-                            onInputClick={(e) => handleSinkClick(out.id, 0, e.clientX, e.clientY)}
+                            onInputClick={() => handleSinkClick(out.id, 0)}
                         />
                     {/each}
 
@@ -422,12 +440,14 @@
                                  }
                                  draggingGateId = gate.id; 
                             }}
-                            onInputClick={(idx, e: PointerEvent) => handleSinkClick(gate.id, idx, e.clientX, e.clientY)}
-                            onOutputClick={(e: PointerEvent) => handleSourceClick(gate.id, e.clientX, e.clientY)}
+                            onInputClick={(idx) => handleSinkClick(gate.id, idx)}
+                            onOutputClick={() => handleSourceClick(gate.id)}
                         />
                     {/each}
                 </svg>
             </div>
+            
+            </div> <!-- End Panning Container -->
         </div>
     </div>
 

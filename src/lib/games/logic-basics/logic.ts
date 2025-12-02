@@ -82,8 +82,8 @@ export const levels: Level[] = [
         id: 1,
         title: "Power On",
         description: "Connect the switch to the light bulb to turn it on.",
-        switches: [{ id: 'sw1', label: 'Power', type: 'toggle', x: 50, y: 150 }],
-        outputs: [{ id: 'out1', label: 'Lamp', x: 550, y: 150 }],
+        switches: [{ id: 'sw1', label: 'Power', type: 'toggle', x: 30, y: 150 }],
+        outputs: [{ id: 'out1', label: 'Lamp', x: 320, y: 150 }],
         availableGates: [],
         goal: (switches, outputs) => outputs.find(o => o.id === 'out1')?.state === true
     },
@@ -91,8 +91,8 @@ export const levels: Level[] = [
         id: 2,
         title: "Door Bell",
         description: "Use the push button to ring the bell (light the lamp).",
-        switches: [{ id: 'btn1', label: 'Bell', type: 'pulse', x: 50, y: 150 }],
-        outputs: [{ id: 'out1', label: 'Bell', x: 550, y: 150 }],
+        switches: [{ id: 'btn1', label: 'Bell', type: 'pulse', x: 30, y: 150 }],
+        outputs: [{ id: 'out1', label: 'Bell', x: 320, y: 150 }],
         availableGates: [],
         goal: (switches, outputs) => outputs.find(o => o.id === 'out1')?.state === true
     },
@@ -100,8 +100,8 @@ export const levels: Level[] = [
         id: 3,
         title: "The Inverter",
         description: "Turn the light ON when the switch is OFF.",
-        switches: [{ id: 'sw1', label: 'Input', type: 'toggle', x: 50, y: 150 }],
-        outputs: [{ id: 'out1', label: 'Result', x: 550, y: 150 }],
+        switches: [{ id: 'sw1', label: 'Input', type: 'toggle', x: 30, y: 150 }],
+        outputs: [{ id: 'out1', label: 'Result', x: 320, y: 150 }],
         availableGates: ['NOT'],
         goal: (switches, outputs) => {
             const sw = switches.find(s => s.id === 'sw1');
@@ -114,10 +114,10 @@ export const levels: Level[] = [
         title: "Safety Lock (AND)",
         description: "Both switches must be ON to activate the machine.",
         switches: [
-            { id: 'sw1', label: 'Key 1', type: 'toggle', x: 50, y: 100 },
-            { id: 'sw2', label: 'Key 2', type: 'toggle', x: 50, y: 200 }
+            { id: 'sw1', label: 'Key 1', type: 'toggle', x: 30, y: 100 },
+            { id: 'sw2', label: 'Key 2', type: 'toggle', x: 30, y: 200 }
         ],
-        outputs: [{ id: 'out1', label: 'Machine', x: 550, y: 150 }],
+        outputs: [{ id: 'out1', label: 'Machine', x: 320, y: 150 }],
         availableGates: ['AND'],
         goal: (switches, outputs) => {
             const s1 = switches.find(s => s.id === 'sw1')?.state;
@@ -131,10 +131,10 @@ export const levels: Level[] = [
         title: "Emergency Override (OR)",
         description: "Turn on the alarm if EITHER sensor is active.",
         switches: [
-            { id: 'sw1', label: 'Sensor A', type: 'toggle', x: 50, y: 100 },
-            { id: 'sw2', label: 'Sensor B', type: 'toggle', x: 50, y: 200 }
+            { id: 'sw1', label: 'Sensor A', type: 'toggle', x: 30, y: 100 },
+            { id: 'sw2', label: 'Sensor B', type: 'toggle', x: 30, y: 200 }
         ],
-        outputs: [{ id: 'out1', label: 'Alarm', x: 550, y: 150 }],
+        outputs: [{ id: 'out1', label: 'Alarm', x: 320, y: 150 }],
         availableGates: ['OR'],
         goal: (switches, outputs) => {
             // Success if we can demonstrate OR behavior (just turning it on once is usually enough for a simple game)
@@ -147,10 +147,10 @@ export const levels: Level[] = [
         title: "Exclusive Access (XOR)",
         description: "The light should be ON only if the switches are DIFFERENT.",
         switches: [
-            { id: 'sw1', label: 'A', type: 'toggle', x: 50, y: 100 },
-            { id: 'sw2', label: 'B', type: 'toggle', x: 50, y: 200 }
+            { id: 'sw1', label: 'A', type: 'toggle', x: 30, y: 100 },
+            { id: 'sw2', label: 'B', type: 'toggle', x: 30, y: 200 }
         ],
-        outputs: [{ id: 'out1', label: 'Light', x: 550, y: 150 }],
+        outputs: [{ id: 'out1', label: 'Light', x: 320, y: 150 }],
         availableGates: ['XOR'],
         goal: (switches, outputs) => {
              const s1 = switches.find(s => s.id === 'sw1')?.state;
