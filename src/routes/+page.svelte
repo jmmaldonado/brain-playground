@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Calculator, Palette } from 'lucide-svelte';
+	import { Calculator, Palette, Cpu } from 'lucide-svelte';
     import { onMount } from 'svelte';
     import { pageTitle } from '$lib/stores/app';
     import { base } from '$app/paths';
@@ -33,6 +33,22 @@
             icon: Palette,
             color: 'bg-purple-100 text-purple-600', // Changed color to purple to match the old mixer vibe
             href: `${base}/games/color-theory`
+        },
+        {
+            id: 'logic-gates',
+            title: 'Logic Lab',
+            description: 'Learn how computers think with digital logic gates!',
+            icon: Cpu,
+            color: 'bg-indigo-100 text-indigo-600',
+            href: `${base}/games/logic-gates`
+        },
+        {
+            id: 'logic-basics',
+            title: 'Logic Basics',
+            description: 'Experiment with switches, buttons, and light bulbs!',
+            icon: Cpu,
+            color: 'bg-yellow-100 text-yellow-600',
+            href: `${base}/games/logic-basics`
         }
 	];
 </script>

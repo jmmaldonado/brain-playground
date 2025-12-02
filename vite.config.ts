@@ -7,6 +7,9 @@ export default defineConfig({
 		sveltekit(),
 		VitePWA({
 			registerType: 'autoUpdate',
+			workbox: {
+				cleanupOutdatedCaches: true
+			},
 			manifest: {
 				name: 'Brain Playground',
 				short_name: 'BrainPlay',
