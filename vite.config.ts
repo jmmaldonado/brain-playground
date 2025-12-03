@@ -10,6 +10,9 @@ export default defineConfig({
 			workbox: {
 				cleanupOutdatedCaches: true
 			},
+			devOptions: {
+				enabled: true
+			},
 			manifest: {
 				name: 'Brain Playground',
 				short_name: 'BrainPlay',

@@ -4,6 +4,8 @@
     import { pageTitle } from '$lib/stores/app';
     import { base } from '$app/paths';
     
+    import InstallPrompt from '$lib/components/InstallPrompt.svelte';
+    
     let { children } = $props();
 </script>
 
@@ -38,4 +40,6 @@
 	<footer class="bg-gray-100 p-4 text-center text-gray-500 text-sm">
 		<p>&copy; {new Date().getFullYear()} Brain Playground</p>
 	</footer>
+    
+    <InstallPrompt />
 </div>

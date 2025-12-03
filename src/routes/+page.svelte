@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Calculator, Palette, Cpu } from 'lucide-svelte';
+	import { Calculator, Palette, Cpu, Lock } from 'lucide-svelte';
     import { onMount } from 'svelte';
     import { pageTitle } from '$lib/stores/app';
     import { base } from '$app/paths';
@@ -49,6 +49,14 @@
             icon: Cpu,
             color: 'bg-yellow-100 text-yellow-600',
             href: `${base}/games/logic-basics`
+        },
+        {
+            id: 'code-breaker',
+            title: 'Code Breaker',
+            description: 'Crack the secret code using logic and deduction!',
+            icon: Lock,
+            color: 'bg-red-100 text-red-600',
+            href: `${base}/games/code-breaker`
         }
 	];
 </script>
