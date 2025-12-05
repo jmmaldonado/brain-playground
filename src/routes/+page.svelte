@@ -57,6 +57,14 @@
             icon: Lock,
             color: 'bg-red-100 text-red-600',
             href: `${base}/games/code-breaker`
+        },
+        {
+            id: 'math-crossing',
+            title: 'Math Crossing',
+            description: 'Solve intersecting math equations in a crossword style!',
+            icon: Calculator,
+            color: 'bg-indigo-100 text-indigo-600',
+            href: `${base}/games/math-crossing`
         }
 	];
 </script>
