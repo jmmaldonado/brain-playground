@@ -380,7 +380,8 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-gray-50 relative overflow-hidden">
+<div
+    class="max-w-3xl mx-auto flex flex-col h-[80vh] min-h-[600px] bg-white rounded-[2rem] shadow-xl overflow-hidden relative border border-gray-100">
     <!-- Note: h-full assumes parent has height. -->
 
     <!-- Top Bar -->
