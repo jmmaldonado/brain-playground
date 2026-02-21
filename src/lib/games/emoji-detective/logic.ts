@@ -16,27 +16,41 @@ export const GAME_DURATION = 45;
 export const TOTAL_EMOJIS = 60;
 export const TARGET_RATIO = 0.2; // 20% of emojis are targets
 
+// BASE LISTS
+const ANIMALS = [
+    '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯',
+    '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆',
+    '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋',
+    '🐌', '🐞', '🐜', '🕷', '🐢', '🐍', '🐙', '🦑', '🦐', '🦀',
+    '🐡', '🐠', '🐬', '🐳', '🐘', '🦒', '🦓', '🦘', '🦥', '🦦'
+];
+
+const FRUITS = [
+    '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈',
+    '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🥑'
+];
+
+const FOOD_MEALS = [
+    '🍕', '🍔', '🍟', '🌭', '🍿', '🥓', '🥚', '🍳', '🧇', '🥞',
+    '🍞', '🥐', '🥨', '🥯', '🥖', '🌮', '🌯', '🥗', '🥘', '🍜',
+    '🍝', '🥪', '🍱', '🍣', '🍤', '🍙', '🍚', '🍛', '🥟', '🍢'
+];
+
+const SWEETS = [
+    '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫',
+    '🍬', '🍭', '🍮', '🍯'
+];
+
+const VEGETABLES = [
+    '🥦', '🥬', '🥒', '🌽', '🥕', '🫑', '🥔', '🍠', '🍆'
+];
+
 export const CATEGORIES: Record<string, string[]> = {
-    'Animals': [
-        '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨',
-        '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤',
-        '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄',
-        '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🕷', '🐢', '🐍',
-        '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠'
-    ],
-    'Fruits': [
-        '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐',
-        '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝'
-    ],
-    'Food': [
-        '🍕', '🍔', '🍟', '🌭', '🍿', '🧂', '🥓', '🥚', '🍳', '🧇',
-        '🥞', '🧈', '🍞', '🥐', '🥨', '🥯', '🥖', '🌮', '🌯', '🥗',
-        '🥘', '🍜', '🍝', '🥪', '🍱', '🍣', '🍤', '🍙', '🍚', '🍛'
-    ],
-    'Something to Eat': [
-        '🍎', '🍊', '🍌', '🍕', '🍔', '🍟', '🍩', '🍪', '🍰', '🧁',
-        '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🍞', '🍳', '🌮', '🍣'
-    ]
+    'Animals': ANIMALS,
+    'Fruits': FRUITS,
+    'Something to Eat': [...FRUITS, ...FOOD_MEALS, ...SWEETS, ...VEGETABLES],
+    'Sweets & Treats': SWEETS,
+    'Veggies': VEGETABLES
 };
 
 const ALL_EMOJIS = Array.from(new Set(Object.values(CATEGORIES).flat()));
@@ -78,8 +92,23 @@ export function generateBoard(layout: DetectiveLayout, mode: DetectiveMode): { t
         };
 
         if (layout === 'Messy Room') {
-            item.x = Math.random() * 90; // percentage
-            item.y = Math.random() * 90; // percentage
+            let x = 0, y = 0, tooClose = false;
+            let attempts = 0;
+            const minDistance = 8; // % distance
+            do {
+                x = 5 + Math.random() * 80; // Stay away from edges
+                y = 5 + Math.random() * 80;
+                tooClose = board.some(other => {
+                    if (other.x === undefined || other.y === undefined) return false;
+                    const dx = x - other.x;
+                    const dy = y - other.y;
+                    return Math.sqrt(dx * dx + dy * dy) < minDistance;
+                });
+                attempts++;
+            } while (tooClose && attempts < 50);
+
+            item.x = x;
+            item.y = y;
             item.rotation = (Math.random() - 0.5) * 60; // -30 to 30 deg
         }
 

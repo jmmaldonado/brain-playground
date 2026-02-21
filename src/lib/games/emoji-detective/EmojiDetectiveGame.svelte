@@ -9,6 +9,7 @@
         generateBoard,
     } from "./logic";
     import { StorageService } from "$lib/services/storage";
+    import { base } from "$app/paths";
     import {
         Trophy,
         ArrowLeft,
@@ -16,6 +17,7 @@
         Search,
         Target,
         Sparkles,
+        Timer,
     } from "lucide-svelte";
 
     let phase: "setup" | "playing" | "results" = $state("setup");
@@ -27,17 +29,26 @@
     let categoryName: string | undefined = $state(undefined);
     let board: EmojiItem[] = $state([]);
     let timerInterval: any;
-    let highScores: Record<string, number> = $state({
-        "Tidy Room-Emoji Match": 0,
-        "Messy Room-Emoji Match": 0,
-        "Tidy Room-Semantic Hunt": 0,
-        "Messy Room-Semantic Hunt": 0,
+    let highScores: Record<string, { score: number; time?: number }> = $state({
+        "Tidy Room-Emoji Match": { score: 0 },
+        "Messy Room-Emoji Match": { score: 0 },
+        "Tidy Room-Semantic Hunt": { score: 0 },
+        "Messy Room-Semantic Hunt": { score: 0 },
     });
 
     onMount(() => {
         const saved = StorageService.load<any>("emoji-detective");
         if (saved && saved.highScores) {
-            highScores = { ...highScores, ...saved.highScores };
+            // Migration check: if saved value is a number, convert to object
+            const updated: any = { ...highScores };
+            for (const key in saved.highScores) {
+                if (typeof saved.highScores[key] === "number") {
+                    updated[key] = { score: saved.highScores[key] };
+                } else {
+                    updated[key] = saved.highScores[key];
+                }
+            }
+            highScores = updated;
         }
     });
 
@@ -78,6 +89,14 @@
             item.isFound = true;
             score += 10;
             playTone(440, "sine"); // Ding
+
+            // Check if all targets found
+            const remaining = board.filter(
+                (e) => e.isTarget && !e.isFound,
+            ).length;
+            if (remaining === 0) {
+                endGame();
+            }
         } else {
             item.isWrong = true;
             score = Math.max(0, score - 5);
@@ -109,8 +128,25 @@
         clearInterval(timerInterval);
         phase = "results";
         const key = `${layout}-${mode}`;
-        if (score > (highScores[key] || 0)) {
-            highScores[key] = score;
+        const timeTaken = GAME_DURATION - timeLeft;
+
+        const currentBest = highScores[key];
+        let improved = false;
+
+        if (score > currentBest.score) {
+            currentBest.score = score;
+            improved = true;
+        }
+
+        if (timeLeft > 0) {
+            // If finished before timer
+            if (!currentBest.time || timeTaken < currentBest.time) {
+                currentBest.time = timeTaken;
+                improved = true;
+            }
+        }
+
+        if (improved) {
             StorageService.save("emoji-detective", { highScores });
         }
     }
@@ -121,35 +157,44 @@
 </script>
 
 <div
-    class="max-w-2xl mx-auto flex flex-col bg-violet-50 text-slate-800 rounded-[2rem] shadow-xl overflow-hidden relative h-[75vh] min-h-[600px] border border-violet-100">
-    <!-- Top Bar -->
+    class="max-w-2xl mx-auto flex flex-col bg-violet-50 text-slate-800 rounded-[2rem] shadow-xl overflow-hidden relative h-[80vh] min-h-[600px] border border-violet-100">
+    <!-- Top Stats Bar -->
     <div
-        class="bg-white border-b border-violet-100 p-4 shadow-sm z-10 shrink-0">
+        class="bg-white border-b border-violet-100 p-3 shadow-sm z-10 shrink-0">
         <div class="max-w-md mx-auto flex justify-between items-center">
-            <button
-                onclick={resetGame}
-                class="p-2 hover:bg-violet-50 rounded-full transition-colors">
-                <ArrowLeft size={24} class="text-violet-500" />
-            </button>
-
-            <div class="flex flex-col items-center">
-                <div class="flex items-center gap-2 text-violet-600 font-black">
-                    <Search size={20} />
-                    <span>EMOJI DETECTIVE</span>
+            <div class="flex items-center gap-3">
+                <div class="bg-violet-100 p-2 rounded-xl">
+                    <Trophy size={18} class="text-yellow-500" />
                 </div>
-                {#if phase === "playing"}
+                <div>
                     <span
-                        class="text-[10px] uppercase tracking-widest font-bold text-slate-400"
-                        >{layout} • {mode}</span>
-                {/if}
+                        class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block leading-none"
+                        >Score</span>
+                    <span class="font-black text-lg text-slate-700 leading-none"
+                        >{score}</span>
+                </div>
             </div>
 
-            <div class="flex items-center gap-4">
-                <div
-                    class={`flex items-center gap-1.5 font-black text-xl ${timeLeft < 10 ? "text-red-500 animate-pulse" : "text-slate-600"}`}>
-                    <Clock size={20} />
-                    <span class="tabular-nums">{timeLeft}</span>
+            {#if phase === "playing"}
+                <div class="flex flex-col items-center">
+                    <span
+                        class="text-[10px] uppercase tracking-widest font-bold text-slate-400"
+                        >{layout}</span>
+                    <span class="text-xs font-black text-violet-600"
+                        >{mode}</span>
                 </div>
+            {/if}
+
+            <div
+                class="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                <Clock
+                    size={16}
+                    class={timeLeft < 10
+                        ? "text-red-500 animate-pulse"
+                        : "text-slate-400"} />
+                <span
+                    class={`tabular-nums font-black text-lg ${timeLeft < 10 ? "text-red-500" : "text-slate-600"}`}
+                    >{timeLeft}</span>
             </div>
         </div>
     </div>
@@ -197,19 +242,29 @@
                         {/each}
                     </div>
 
-                    <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
                         <span
-                            class="text-xs font-black text-slate-400 uppercase tracking-widest block text-left ml-2"
+                            class="text-xs font-black text-slate-400 uppercase tracking-widest block text-left ml-2 col-span-2"
                             >Select Layout</span>
                         {#each ["Tidy Room", "Messy Room"] as l}
                             <button
                                 onclick={() =>
                                     startGame(l as DetectiveLayout, mode)}
-                                class="bg-white border-2 border-violet-100 p-4 rounded-2xl shadow-sm text-lg font-bold hover:border-violet-400 hover:bg-violet-50 transition-all flex justify-between items-center group">
-                                <span class="text-violet-700">{l}</span>
-                                <span class="text-xs font-bold text-slate-400"
-                                    >Best: {highScores[`${l}-${mode}`] ||
-                                        0}</span>
+                                class="bg-white border-2 border-violet-100 p-4 rounded-2xl shadow-sm hover:border-violet-400 hover:bg-violet-50 transition-all flex flex-col items-center group">
+                                <span class="text-violet-700 font-bold mb-1"
+                                    >{l}</span>
+                                <div class="text-center">
+                                    <span
+                                        class="text-[10px] font-bold text-slate-400 block"
+                                        >Best: {highScores[`${l}-${mode}`]
+                                            .score}</span>
+                                    {#if highScores[`${l}-${mode}`].time}
+                                        <span
+                                            class="text-[10px] font-bold text-green-500"
+                                            >{highScores[`${l}-${mode}`]
+                                                .time}s</span>
+                                    {/if}
+                                </div>
                             </button>
                         {/each}
                     </div>
@@ -302,18 +357,28 @@
                         You found so many items!
                     </p>
 
-                    <div class="bg-slate-50 rounded-3xl p-6 mb-8">
-                        <span
-                            class="block text-xs uppercase tracking-widest font-black text-slate-400 mb-1"
-                            >Detective Score</span>
-                        <span class="text-6xl font-black text-violet-600"
-                            >{score}</span>
-                        {#if score >= (highScores[`${layout}-${mode}`] || 0)}
+                    <div class="grid grid-cols-2 gap-4 mb-8">
+                        <div class="bg-slate-50 rounded-3xl p-4">
                             <span
-                                class="block text-xs font-bold text-green-500 mt-2"
-                                >NEW PERSONAL BEST! 🏆</span>
-                        {/if}
+                                class="block text-[10px] uppercase tracking-widest font-black text-slate-400 mb-1"
+                                >Score</span>
+                            <span class="text-3xl font-black text-violet-600"
+                                >{score}</span>
+                        </div>
+                        <div class="bg-slate-50 rounded-3xl p-4">
+                            <span
+                                class="block text-[10px] uppercase tracking-widest font-black text-slate-400 mb-1"
+                                >Time</span>
+                            <span class="text-3xl font-black text-indigo-600"
+                                >{GAME_DURATION - timeLeft}s</span>
+                        </div>
                     </div>
+
+                    {#if score >= highScores[`${layout}-${mode}`].score || (timeLeft > 0 && GAME_DURATION - timeLeft <= (highScores[`${layout}-${mode}`].time || 999))}
+                        <span
+                            class="block text-xs font-bold text-green-500 mb-4"
+                            >NEW RECORD! 🏆</span>
+                    {/if}
 
                     <button
                         onclick={resetGame}

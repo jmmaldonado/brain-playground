@@ -12,6 +12,7 @@
     } from "./logic";
     import Parrot from "./Parrot.svelte";
     import { StorageService } from "$lib/services/storage";
+    import { base } from "$app/paths";
     import {
         Trophy,
         ArrowLeft,
@@ -19,6 +20,7 @@
         Play,
         Delete,
         Check,
+        Globe,
     } from "lucide-svelte";
 
     let gameState: ParrotGameState = $state({
@@ -36,16 +38,28 @@
     let userInput: number[] = $state([]);
     let isSpeaking = $state(false);
     let feedback: "correct" | "wrong" | null = $state(null);
+    let language: "es-ES" | "en-US" = $state("es-ES");
     let highScores: Record<ParrotMode, number> = $state({
         Copycat: 0,
         Rewind: 0,
         "Small to Tall": 0,
     });
 
+    let voices: SpeechSynthesisVoice[] = [];
+
     onMount(() => {
         const saved = StorageService.load<any>("number-parrot");
         if (saved && saved.highScores) {
             highScores = saved.highScores;
+        }
+
+        // Pre-load voices
+        const loadVoices = () => {
+            voices = window.speechSynthesis.getVoices();
+        };
+        loadVoices();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = loadVoices;
         }
     });
 
@@ -68,8 +82,16 @@
     function speak(text: string) {
         if (!("speechSynthesis" in window)) return;
         const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = language;
         utterance.rate = 0.8;
         utterance.pitch = 1.2; // Parrot-like pitch
+
+        // Try to find a voice that matches the language
+        const voice = voices.find((v) =>
+            v.lang.startsWith(language.split("-")[0]),
+        );
+        if (voice) utterance.voice = voice;
+
         window.speechSynthesis.speak(utterance);
     }
 
@@ -137,39 +159,52 @@
 </script>
 
 <div
-    class="max-w-xl mx-auto flex flex-col bg-gradient-to-b from-sky-400 to-indigo-500 text-white rounded-[2rem] shadow-2xl overflow-hidden p-6 relative min-h-[600px] h-[70vh]">
-    <!-- Header -->
-    <div class="flex justify-between items-center mb-8 shrink-0">
-        <button
-            onclick={resetGame}
-            class="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors">
-            <ArrowLeft size={24} />
-        </button>
-
-        <div class="flex flex-col items-center">
-            <h1
-                class="text-2xl font-black tracking-tight flex items-center gap-2">
-                NUMBER PARROT
-            </h1>
-            {#if phase !== "setup"}
+    class="max-w-xl mx-auto flex flex-col bg-gradient-to-b from-sky-400 to-indigo-500 text-white rounded-[2rem] shadow-2xl overflow-hidden p-6 relative min-h-[600px] h-[80vh]">
+    <!-- Internal Stats Bar -->
+    <div
+        class="flex justify-between items-center mb-6 shrink-0 bg-white/10 px-4 py-2 rounded-2xl">
+        <div class="flex items-center gap-4">
+            <div class="bg-white/20 p-2 rounded-xl">
+                <Trophy size={20} class="text-yellow-300 fill-yellow-300" />
+            </div>
+            <div>
                 <span
-                    class="text-xs font-bold bg-white/20 px-3 py-1 rounded-full uppercase tracking-widest"
-                    >{gameState.mode}</span>
-            {/if}
+                    class="text-[10px] font-bold uppercase tracking-wider opacity-60 block"
+                    >Score</span>
+                <span class="font-black text-xl leading-none"
+                    >{gameState.score}</span>
+            </div>
         </div>
 
-        <div class="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-2xl">
-            <Trophy size={20} class="text-yellow-300 fill-yellow-300" />
-            <span class="font-black text-xl">{gameState.score}</span>
-        </div>
+        {#if phase !== "setup"}
+            <span
+                class="text-xs font-bold bg-white/20 px-3 py-1 rounded-lg uppercase tracking-widest">
+                {gameState.mode}
+            </span>
+        {/if}
     </div>
 
     <!-- Game Area -->
     <div
-        class="flex-1 flex flex-col items-center justify-center overflow-y-auto min-h-0 min-w-0 p-2">
+        class="flex-1 flex flex-col items-center justify-center overflow-y-auto min-h-0 h-full min-w-0 p-2">
         {#if phase === "setup"}
             <div in:scale class="flex flex-col gap-4 w-full max-w-xs">
                 <h2 class="text-center text-xl font-bold mb-4">Pick a Game!</h2>
+
+                <!-- Language Toggle -->
+                <div class="flex bg-white/10 p-1 rounded-2xl mb-4">
+                    <button
+                        onclick={() => (language = "es-ES")}
+                        class={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${language === "es-ES" ? "bg-white text-indigo-600 shadow-md" : "text-white opacity-60 hover:opacity-100"}`}>
+                        <Globe size={16} /> Español
+                    </button>
+                    <button
+                        onclick={() => (language = "en-US")}
+                        class={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${language === "en-US" ? "bg-white text-indigo-600 shadow-md" : "text-white opacity-60 hover:opacity-100"}`}>
+                        <Globe size={16} /> English
+                    </button>
+                </div>
+
                 {#each ["Copycat", "Rewind", "Small to Tall"] as mode}
                     <button
                         onclick={() => startGame(mode as ParrotMode)}
