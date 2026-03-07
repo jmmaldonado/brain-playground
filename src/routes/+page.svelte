@@ -6,6 +6,7 @@
         Lock,
         Bird,
         Search,
+        Box,
     } from "lucide-svelte";
     import { onMount } from "svelte";
     import { pageTitle } from "$lib/stores/app";
@@ -91,6 +92,14 @@
             icon: Search,
             color: "bg-violet-100 text-violet-600",
             href: `${base}/games/emoji-detective`,
+        },
+        {
+            id: "rubiks-cube-timer",
+            title: "SpeedCube Timer",
+            description: "Practice your speedsolving with this professional timer!",
+            icon: Box,
+            color: "bg-blue-100 text-blue-600",
+            href: `${base}/games/rubiks-cube-timer`,
         },
     ];
 </script>
