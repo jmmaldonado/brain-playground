@@ -50,14 +50,14 @@
     };
 
     // Time formatting
-    function formatTime(ms: number): string {
-        if (ms === Infinity) return "00.000";
+    function formatTime(ms: number, forceMinutes = false): string {
+        if (ms === Infinity) return forceMinutes ? "00:00.000" : "00.000";
         const minutes = Math.floor(ms / 60000);
         const seconds = Math.floor((ms % 60000) / 1000);
         const milliseconds = Math.floor(ms % 1000);
 
-        const mStr = minutes > 0 ? `${minutes}:` : '';
-        const sStr = minutes > 0 ? seconds.toString().padStart(2, '0') : seconds.toString().padStart(2, '0');
+        const mStr = (minutes > 0 || forceMinutes) ? `${minutes.toString().padStart(2, '0')}:` : '';
+        const sStr = (minutes > 0 || forceMinutes) ? seconds.toString().padStart(2, '0') : seconds.toString();
         const msStr = milliseconds.toString().padStart(3, '0');
 
         return `${mStr}${sStr}.${msStr}`;
@@ -182,18 +182,7 @@
 
 </script>
 
-<div class="bg-gray-900 text-white min-h-[calc(100vh-4rem)] flex flex-col overflow-hidden font-mono select-none">
-    <!-- Header -->
-    <header class="p-4 flex justify-between items-center border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm z-20">
-        <h1 class="text-lg font-bold flex items-center gap-2">
-            <Box class="text-blue-500" /> CubeTimer <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">V2.0</span>
-        </h1>
-        <div class="text-right">
-            <p class="text-[10px] text-gray-500 uppercase tracking-widest">Mejor Tiempo (PB)</p>
-            <p class="text-lg font-bold text-yellow-500">{formatTime(bestTime)}</p>
-        </div>
-    </header>
-
+<div class="bg-gray-900 text-white min-h-[calc(100vh-4rem)] flex flex-col overflow-hidden font-mono select-none -m-6">
     <!-- Main Content -->
     <main class="flex-1 flex flex-col items-center justify-center relative p-6">
         
@@ -295,6 +284,20 @@
             </button>
         </div>
         <div class="space-y-3 pb-12">
+            {#if history.length > 0}
+                <div class="flex justify-between items-center bg-yellow-500/10 p-4 rounded-2xl border border-yellow-500/40 mb-6">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-yellow-500 text-gray-900 p-2 rounded-lg">
+                            <Box size={20} />
+                        </div>
+                        <div>
+                            <p class="text-[10px] text-yellow-500/70 uppercase font-black tracking-widest">Personal Best (PB)</p>
+                            <p class="text-2xl font-bold font-mono text-yellow-500">{formatTime(bestTime, true)}</p>
+                        </div>
+                    </div>
+                </div>
+            {/if}
+
             {#if history.length === 0}
                 <div class="flex flex-col items-center justify-center py-12 text-gray-700">
                     <Clock class="w-8 h-8 mb-2 opacity-20" />
