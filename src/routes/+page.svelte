@@ -7,6 +7,7 @@
         Bird,
         Search,
         Box,
+        MapPin,
     } from "lucide-svelte";
     import { onMount } from "svelte";
     import { pageTitle } from "$lib/stores/app";
@@ -18,6 +19,14 @@
 
     // This will be populated dynamically later
     let games = [
+        {
+            id: "spain-map",
+            title: "Mapa de España",
+            description: "¡Aprende las comunidades, provincias y capitales!",
+            icon: MapPin,
+            color: "bg-orange-100 text-orange-600",
+            href: `${base}/games/spain-map`,
+        },
         {
             id: "math-game",
             title: "Math Whiz",
