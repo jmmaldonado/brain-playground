@@ -205,6 +205,12 @@ function createGameStore() {
     },
     stopGame: () => {
       update(state => ({ ...state, isPlaying: false, status: 'idle', currentQuestion: null, focusedRegion: null }));
+    },
+    clearMistakes: () => {
+      if (browser) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      update(state => ({ ...state, mistakes: {} }));
     }
   };
 }

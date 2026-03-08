@@ -35,6 +35,12 @@
     }
   }
 
+  function handleClearMistakes() {
+    if (confirm('¿Estás seguro de que quieres borrar el historial de fallos?')) {
+      gameStore.clearMistakes();
+    }
+  }
+
   $: totalQuestions = history.length;
   $: correctAnswers = history.filter(h => h.correct).length;
   $: accuracy = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
@@ -54,8 +60,8 @@
   }
 </script>
 
-<div class="min-h-[calc(100vh-12rem)] flex flex-col items-center py-4 px-0 font-sans text-gray-800">
-  <header class="w-full max-w-4xl flex justify-end items-center mb-6">
+<div class="min-h-[calc(100vh-12rem)] flex flex-col items-center py-0 px-0 -m-2 font-sans text-gray-800">
+  <header class="w-full max-w-4xl flex justify-end items-center mb-2">
     {#if isPlaying}
       <button 
         class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors" 
@@ -111,7 +117,15 @@
 
       {#if topMistakes.length > 0}
         <div class="mt-10 border-t border-gray-100 pt-6">
-          <h3 class="text-lg font-bold text-gray-700 mb-4">Zonas a mejorar</h3>
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-700">Zonas a mejorar</h3>
+            <button 
+              class="text-sm font-bold text-red-500 hover:text-red-600 transition-colors bg-red-50 px-3 py-1 rounded-lg"
+              on:click={handleClearMistakes}
+            >
+              Borrar historial
+            </button>
+          </div>
           <div class="space-y-2">
             {#each topMistakes as [id, stats]}
               <div class="flex justify-between items-center bg-red-50 p-4 rounded-xl border border-red-100">
@@ -124,10 +138,10 @@
       {/if}
     </div>
   {:else}
-    <div class="w-full max-w-5xl flex flex-col lg:flex-row gap-6" transition:fade>
+    <div class="w-full max-w-5xl flex flex-col lg:flex-row gap-2" transition:fade>
       <div class="flex-1 flex flex-col items-center">
         <!-- Question display -->
-        <div class="w-full text-center mb-4 min-h-[100px] flex flex-col justify-center bg-white rounded-3xl shadow-sm p-4 border border-gray-100">
+        <div class="w-full text-center mb-2 min-h-[100px] flex flex-col justify-center bg-white rounded-3xl shadow-sm p-2 border border-gray-100">
           {#if selectedMode === 'learning'}
             {#if currentQuestion}
               <div in:slide>
@@ -165,9 +179,9 @@
       </div>
 
       <!-- Sidebar -->
-      <div class="w-full lg:w-72 flex flex-col gap-4">
+      <div class="w-full lg:w-72 flex flex-col gap-2">
         {#if selectedMode !== 'learning'}
-          <div class="bg-white p-6 rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center">
+          <div class="bg-white p-2 rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center">
             <div class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Aciertos</div>
             <div class="text-5xl font-black text-green-500">{correctAnswers}</div>
             <div class="text-sm font-bold text-gray-400 mt-2">{accuracy}% de acierto</div>
@@ -178,7 +192,7 @@
           <div class="flex flex-col gap-3" in:slide>
             {#each options as option}
               <button 
-                class="py-4 px-6 rounded-2xl font-bold text-lg border-b-4 transition-all active:translate-y-1 active:border-b-0
+                class="py-2 px-2 rounded-2xl font-bold text-lg border-b-4 transition-all active:translate-y-1 active:border-b-0
                   {status !== 'playing' && currentQuestion?.id === option.id ? 'bg-green-500 border-green-700 text-white' : 
                    status !== 'playing' ? 'bg-gray-100 border-gray-300 text-gray-400 opacity-50' : 
                    'bg-white border-gray-200 text-gray-700 hover:border-blue-400 hover:text-blue-600 shadow-sm'}"
@@ -192,7 +206,7 @@
         {/if}
         
         {#if selectedMode === 'learning'}
-           <div class="bg-blue-50 p-6 rounded-3xl border border-blue-100 text-blue-800 text-sm italic" transition:fade>
+           <div class="bg-blue-50 p-2 rounded-3xl border border-blue-100 text-blue-800 text-sm italic" transition:fade>
               Este es el modo de exploración. Haz clic en cualquier parte del mapa para descubrir su nombre y capital.
            </div>
         {/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { level1, level2 } from './maps';
+  import { provinces, communities } from './data';
 
   let {
     level = 'communities',
@@ -16,6 +17,32 @@
   } = $props();
 
   let svgContent = $derived(level === 'communities' ? level1 : level2);
+
+  const colors = [
+    '#DD4132', 
+    '#9E1030', 
+    '#FF842A', 
+    '#FF6F61', 
+    '#C83E74', 
+    '#8D9440', 
+    '#FFD662', 
+    '#00539C', 
+    '#755139', 
+    '#DAA03D', 
+    '#616247', 
+    '#E8B5CE', 
+    '#D89C9A'
+  ];
+
+  function getCommunityColor(id: string) {
+    let communityId = id;
+    if (level !== 'communities') {
+      const province = provinces.find(p => p.id === id);
+      communityId = province?.communityId || id;
+    }
+    const index = communities.findIndex(c => c.id === communityId);
+    return index !== -1 ? colors[index % colors.length] : '#cbd5e1';
+  }
 
   function handleClick(e: MouseEvent) {
     if (mode !== 'locate' && mode !== 'learning') return;
@@ -51,15 +78,28 @@
 
   <!-- We inject a style block specifically for the dynamic ID targeting, 
        but using svelte:element to bypass Svelte's CSS preprocessor limitations -->
-  {#if focusedRegion}
-    <svelte:element this="style">
+  <svelte:element this="style">
+    {#if mode === 'learning'}
+      {#if level === 'communities'}
+        {#each communities as community}
+          {`.map-wrapper #${community.id} { fill: ${getCommunityColor(community.id)}; }`}
+        {/each}
+      {:else}
+        {#each provinces as province}
+          {`.map-wrapper #${province.id} { fill: ${getCommunityColor(province.id)}; }`}
+        {/each}
+      {/if}
+    {/if}
+    
+    {#if focusedRegion}
       {`.map-wrapper #${focusedRegion} {
         fill: ${highlightColor} !important;
         stroke: #000 !important;
         stroke-width: ${mode === 'learning' ? '2px' : '1.5px'} !important;
+        z-index: 10;
       }`}
-    </svelte:element>
-  {/if}
+    {/if}
+  </svelte:element>
 </div>
 
 <style>
@@ -85,13 +125,6 @@
   }
 
   /* Learning mode styles */
-  :global(.map-wrapper.learning-mode path:nth-child(7n+1)) { fill: #fecdd3; }
-  :global(.map-wrapper.learning-mode path:nth-child(7n+2)) { fill: #fed7aa; }
-  :global(.map-wrapper.learning-mode path:nth-child(7n+3)) { fill: #fef08a; }
-  :global(.map-wrapper.learning-mode path:nth-child(7n+4)) { fill: #d9f99d; }
-  :global(.map-wrapper.learning-mode path:nth-child(7n+5)) { fill: #a7f3d0; }
-  :global(.map-wrapper.learning-mode path:nth-child(7n+6)) { fill: #bae6fd; }
-  :global(.map-wrapper.learning-mode path:nth-child(7n+7)) { fill: #c7d2fe; }
   :global(.map-wrapper.learning-mode circle) { fill: #cbd5e1; }
   
   :global(.map-wrapper.learning-mode path:hover), 
