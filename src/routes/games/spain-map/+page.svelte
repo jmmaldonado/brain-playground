@@ -19,9 +19,9 @@
     gameStore.stopGame();
   }
 
-  function handleRegionClick(e: CustomEvent<{ id: string }>) {
+  function handleRegionClick(id: string) {
     if (selectedMode === 'locate' || selectedMode === 'learning') {
-      gameStore.guess(e.detail.id);
+      gameStore.guess(id);
     }
   }
 
@@ -164,7 +164,7 @@
             mode={selectedMode}
             focusedRegion={focusedRegion}
             status={status}
-            on:regionClick={handleRegionClick}
+            onregionClick={handleRegionClick}
           />
         </div>
       </div>

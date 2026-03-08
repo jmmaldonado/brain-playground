@@ -1,64 +1,49 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { browser } from '$app/environment';
-  
-  export let level: 'communities' | 'provinces' | 'capitals' = 'communities';
-  export let focusedRegion: string | null = null;
-  export let status: 'playing' | 'correct' | 'incorrect' | 'idle' = 'idle';
-  export let mode: 'locate' | 'identify' | 'learning' = 'locate';
+  import { level1, level2 } from './maps';
 
-  const dispatch = createEventDispatcher<{
-    regionClick: { id: string }
-  }>();
+  let {
+    level = 'communities',
+    focusedRegion = null,
+    status = 'idle',
+    mode = 'locate',
+    onregionClick
+  }: {
+    level?: 'communities' | 'provinces' | 'capitals';
+    focusedRegion?: string | null;
+    status?: 'playing' | 'correct' | 'incorrect' | 'idle';
+    mode?: 'locate' | 'identify' | 'learning';
+    onregionClick?: (id: string) => void;
+  } = $props();
 
-  let svgContent = '';
-  
-  $: svgFile = level === 'communities' ? '/es-level1.svg' : '/es-level2.svg';
-
-  async function loadMap(url: string) {
-    if (!browser) return;
-    const res = await fetch(url);
-    if (res.ok) {
-      svgContent = await res.text();
-    }
-  }
-
-  $: {
-    if (browser) {
-      loadMap(svgFile);
-    }
-  }
+  let svgContent = $derived(level === 'communities' ? level1 : level2);
 
   function handleClick(e: MouseEvent) {
     if (mode !== 'locate' && mode !== 'learning') return;
     
     const target = e.target as SVGElement;
     if (target.tagName === 'path' || target.tagName === 'circle') {
-      // In the SVG, paths have the region ID
-      // Sometimes we might click a child element, but usually the path is the target
       let current: SVGElement | null = target;
       while (current && current.tagName !== 'svg') {
-         if (current.id && current.id.startsWith('ES')) {
-            dispatch('regionClick', { id: current.id });
-            return;
-         }
-         current = current.parentElement as SVGElement | null;
+        if (current.id && current.id.startsWith('ES')) {
+          onregionClick?.(current.id);
+          return;
+        }
+        current = current.parentElement as SVGElement | null;
       }
     }
   }
 
-  $: highlightColor = status === 'correct' ? '#4ade80' : status === 'incorrect' ? '#f87171' : '#facc15';
-
+  let highlightColor = $derived(status === 'correct' ? '#4ade80' : status === 'incorrect' ? '#f87171' : '#facc15');
 </script>
 
-<div 
+<div
   class="map-wrapper"
   class:locate-mode={mode === 'locate'}
   class:identify-mode={mode === 'identify'}
   class:learning-mode={mode === 'learning'}
   style="--highlight-color: {highlightColor}; --focused-region: '{focusedRegion}';"
-  on:click={handleClick}
-  on:keydown={(e) => e.key === 'Enter' && handleClick(e as any)}
+  onclick={handleClick}
+  onkeydown={(e) => e.key === 'Enter' && handleClick(e as any)}
   role="button"
   tabindex="0"
 >
