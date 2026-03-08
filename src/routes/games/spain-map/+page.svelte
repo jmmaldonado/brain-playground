@@ -50,7 +50,7 @@
   }
 </script>
 
-<div class="min-h-screen flex flex-col items-center py-4 px-4 font-sans text-gray-800">
+<div class="min-h-screen flex flex-col items-center py-4 px-0 -m-2 font-sans text-gray-800">
   <div class="w-full max-w-4xl mb-4">
     <a href="/" class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors">
       <ArrowLeft size={20} /> Volver al menú
