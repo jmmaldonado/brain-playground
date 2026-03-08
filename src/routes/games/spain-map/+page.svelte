@@ -4,7 +4,11 @@
   import { gameStore, type Level, type Mode } from '$lib/games/spain-map/logic';
   import { fade, slide } from 'svelte/transition';
   import { communities, provinces } from '$lib/games/spain-map/data';
-  import { ArrowLeft } from 'lucide-svelte';
+  import { pageTitle } from '$lib/stores/app';
+
+  onMount(() => {
+    pageTitle.set('Mapa de España');
+  });
 
   let selectedLevel: Level = 'communities';
   let selectedMode: Mode = 'locate';
@@ -50,17 +54,8 @@
   }
 </script>
 
-<div class="min-h-screen flex flex-col items-center py-4 px-0 -m-2 font-sans text-gray-800">
-  <div class="w-full max-w-4xl mb-4">
-    <a href="/" class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors">
-      <ArrowLeft size={20} /> Volver al menú
-    </a>
-  </div>
-
-  <header class="w-full max-w-4xl flex justify-between items-center mb-6">
-    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
-      Mapa de España
-    </h1>
+<div class="min-h-[calc(100vh-12rem)] flex flex-col items-center py-4 px-0 font-sans text-gray-800">
+  <header class="w-full max-w-4xl flex justify-end items-center mb-6">
     {#if isPlaying}
       <button 
         class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors" 
