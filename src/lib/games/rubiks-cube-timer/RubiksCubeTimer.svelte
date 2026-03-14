@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { Box, Hand, PlayCircle, History, Clock, Trash2 } from 'lucide-svelte';
+    import { Box, Hand, PlayCircle, History, Clock, Trash2, Layers, Triangle, Clover } from 'lucide-svelte';
     import confetti from 'canvas-confetti';
     import { StorageService } from '$lib/services/storage';
 
@@ -9,6 +9,22 @@
         date: string;
     }
 
+    type CubeType = '2x2' | '3x3' | 'Pyraminx' | 'Trebol';
+
+    interface CubeMetadata {
+        id: CubeType;
+        name: string;
+        icon: any;
+    }
+
+    const CUBE_TYPES: CubeMetadata[] = [
+        { id: '2x2', name: '2x2', icon: Layers },
+        { id: '3x3', name: '3x3', icon: Box },
+        { id: 'Pyraminx', name: 'Pyraminx', icon: Triangle },
+        { id: 'Trebol', name: 'Trebol', icon: Clover },
+    ];
+
+    let selectedCube = $state<CubeType>('3x3');
     let startTime = $state(0);
     let currentTime = $state(0);
     let timerInterval: ReturnType<typeof setInterval> | null = null;
@@ -16,21 +32,27 @@
     let leftActive = $state(false);
     let rightActive = $state(false);
     let wakeLock: WakeLockSentinel | null = null;
-    let history = $state<HistoryItem[]>([]);
+    let allHistories = $state<Record<CubeType, HistoryItem[]>>({
+        '2x2': [],
+        '3x3': [],
+        'Pyraminx': [],
+        'Trebol': []
+    });
     let showResult = $state(false);
     let isNewRecord = $state(false);
 
     // Derived state
+    let history = $derived(allHistories[selectedCube]);
     let bestTime = $derived(history.length > 0 ? Math.min(...history.map(h => h.time)) : Infinity);
     let displayTime = $derived(isRunning ? currentTime : (showResult ? currentTime : 0)); // Determine what to show
 
     // Constants
-    const STORAGE_KEY = 'cube-timer-history';
+    const STORAGE_KEY = 'cube-timer-history-v2';
 
     onMount(() => {
-        const savedHistory = StorageService.load<HistoryItem[]>(STORAGE_KEY);
-        if (savedHistory) {
-            history = savedHistory;
+        const savedHistories = StorageService.load<Record<CubeType, HistoryItem[]>>(STORAGE_KEY);
+        if (savedHistories) {
+            allHistories = { ...allHistories, ...savedHistories };
         }
 
         // Re-acquire wake lock on visibility change
@@ -129,9 +151,9 @@
             time: ms,
             date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
         };
-        // Use spread to trigger reactivity if needed, though $state handles array mutation better in Svelte 5
-        history = [entry, ...history];
-        StorageService.save(STORAGE_KEY, history);
+        
+        allHistories[selectedCube] = [entry, ...allHistories[selectedCube]];
+        StorageService.save(STORAGE_KEY, allHistories);
     }
 
     function resetApp() {
@@ -143,9 +165,22 @@
     }
 
     function clearAllData() {
-        if (confirm("¿Deseas eliminar permanentemente todo el historial y récords?")) {
-            StorageService.save(STORAGE_KEY, []); // Or clear specific key
-            history = [];
+        if (confirm(`¿Deseas eliminar el historial de ${selectedCube}?`)) {
+            allHistories[selectedCube] = [];
+            StorageService.save(STORAGE_KEY, allHistories);
+            resetApp();
+        }
+    }
+
+    function clearEverything() {
+        if (confirm("¿Deseas eliminar TODO el historial de TODOS los cubos?")) {
+            allHistories = {
+                '2x2': [],
+                '3x3': [],
+                'Pyraminx': [],
+                'Trebol': []
+            };
+            StorageService.save(STORAGE_KEY, allHistories);
             resetApp();
         }
     }
@@ -183,6 +218,27 @@
 </script>
 
 <div class="bg-gray-900 text-white min-h-[calc(100vh-4rem)] flex flex-col overflow-hidden font-mono select-none -m-6">
+    <!-- Cube Selector -->
+    <div class="bg-black/20 border-b border-gray-800 p-2 overflow-x-auto no-scrollbar">
+        <div class="flex gap-2 min-w-max px-2">
+            {#each CUBE_TYPES as cube}
+                <button
+                    onclick={() => {
+                        if (!isRunning) {
+                            selectedCube = cube.id;
+                            resetApp();
+                        }
+                    }}
+                    class="flex items-center gap-2 px-4 py-2 rounded-xl transition-all {selectedCube === cube.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-800/50 text-gray-400 hover:bg-gray-800'}"
+                    disabled={isRunning}
+                >
+                    <cube.icon size={16} />
+                    <span class="text-xs font-bold uppercase tracking-wider">{cube.name}</span>
+                </button>
+            {/each}
+        </div>
+    </div>
+
     <!-- Main Content -->
     <main class="flex-1 flex flex-col items-center justify-center relative p-6">
         
@@ -205,7 +261,7 @@
                 </div>
 
                 <!-- Touch Zones -->
-                <div class="w-full max-w-xl grid grid-cols-2 gap-6 h-56 md:h-72 transition-opacity duration-200 {isRunning ? 'opacity-0 pointer-events-none' : 'opacity-100'}">
+                <div class="w-full max-w-xl grid grid-cols-2 gap-6 h-32 md:h-56 transition-opacity duration-200 {isRunning ? 'opacity-0 pointer-events-none' : 'opacity-100'}">
                     <!-- Left Zone -->
                     <div 
                         class="touch-zone border-2 border-dashed border-gray-700 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 bg-gray-800/20 transition-all duration-100 {leftActive ? 'bg-green-500/40 border-green-500 scale-95' : ''}"
@@ -274,21 +330,39 @@
     <div class="h-1/3 border-t border-gray-800 bg-black/40 p-6 overflow-y-auto no-scrollbar">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-xs font-black uppercase text-gray-500 tracking-widest flex items-center gap-2">
-                <History class="w-4 h-4" /> Últimos Tiempos
+                <History class="w-4 h-4" /> {selectedCube} - Historial
             </h2>
-            <button 
-                onclick={clearAllData}
-                class="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1 rounded-lg hover:bg-red-500 hover:text-white transition-all font-bold uppercase flex items-center gap-1"
-            >
-                <Trash2 size={12} /> Limpiar Todo
-            </button>
+            <div class="flex gap-2">
+                <button 
+                    onclick={clearAllData}
+                    class="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1 rounded-lg hover:bg-red-500 hover:text-white transition-all font-bold uppercase flex items-center gap-1"
+                >
+                    <Trash2 size={12} /> Limpiar {selectedCube}
+                </button>
+                <!-- <button 
+                    onclick={clearEverything}
+                    class="text-[10px] bg-red-800/10 text-red-800 border border-red-800/20 px-3 py-1 rounded-lg hover:bg-red-800 hover:text-white transition-all font-bold uppercase flex items-center gap-1"
+                >
+                    <Trash2 size={12} /> Limpiar Todo
+                </button> -->
+            </div>
         </div>
         <div class="space-y-3 pb-12">
             {#if history.length > 0}
                 <div class="flex justify-between items-center bg-yellow-500/10 p-4 rounded-2xl border border-yellow-500/40 mb-6">
                     <div class="flex items-center gap-3">
                         <div class="bg-yellow-500 text-gray-900 p-2 rounded-lg">
-                            <Box size={20} />
+                            {#if selectedCube === '2x2'}
+                                <Layers size={20} />
+                            {:else if selectedCube === '3x3'}
+                                <Box size={20} />
+                            {:else if selectedCube === 'Pyraminx'}
+                                <Triangle size={20} />
+                            {:else if selectedCube === 'Trebol'}
+                                <Clover size={20} />
+                            {:else}
+                                <Box size={20} />
+                            {/if}
                         </div>
                         <div>
                             <p class="text-[10px] text-yellow-500/70 uppercase font-black tracking-widest">Personal Best (PB)</p>
