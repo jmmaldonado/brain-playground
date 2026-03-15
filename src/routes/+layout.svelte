@@ -5,9 +5,25 @@
     import { base } from '$app/paths';
     
     import InstallPrompt from '$lib/components/InstallPrompt.svelte';
-    
+
     let { children } = $props();
+
+    $effect(() => {
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.hostname !== 'localhost') {
+            navigator.serviceWorker.register(`${base}/sw.js`, { scope: `${base}/` })
+                .then((registration) => {
+                    console.log('SW Registered', registration);
+                })
+                .catch((error) => {
+                    console.log('SW registration error', error);
+                });
+        }
+    });
 </script>
+
+<svelte:head>
+    <link rel="manifest" href="{base}/manifest.webmanifest">
+</svelte:head>
 
 <div class="min-h-screen flex flex-col">
 	<header class="bg-blue-600 text-white p-4 shadow-md">

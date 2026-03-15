@@ -172,6 +172,13 @@
         }
     }
 
+    function deleteResult(index: number) {
+        if (confirm('¿Deseas eliminar este tiempo?')) {
+            allHistories[selectedCube] = allHistories[selectedCube].filter((_, i) => i !== index);
+            StorageService.save(STORAGE_KEY, allHistories);
+        }
+    }
+
     function clearEverything() {
         if (confirm("¿Deseas eliminar TODO el historial de TODOS los cubos?")) {
             allHistories = {
@@ -217,7 +224,7 @@
 
 </script>
 
-<div class="bg-gray-900 text-white min-h-[calc(100vh-4rem)] flex flex-col overflow-hidden font-mono select-none -m-6">
+<div class="bg-gray-900 text-white min-h-[calc(100vh-4rem)] flex flex-col overflow-hidden font-mono select-none -m-6 touch-manipulation">
     <!-- Cube Selector -->
     <div class="bg-black/20 border-b border-gray-800 p-2 overflow-x-auto no-scrollbar">
         <div class="flex gap-2 min-w-max px-2">
@@ -240,12 +247,12 @@
     </div>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col items-center justify-center relative p-6">
+    <main class="flex-1 flex flex-col items-center justify-center relative p-4 md:p-6 min-h-0">
         
         {#if !showResult}
             <!-- Timer View -->
-            <div class="flex flex-col items-center justify-center w-full text-center">
-                <div class="text-7xl md:text-9xl font-bold mb-4 transition-colors {leftActive && rightActive ? 'text-[#22c55e]' : ''}">
+            <div class="flex flex-col items-center justify-center w-full text-center py-4">
+                <div class="text-6xl sm:text-7xl md:text-9xl font-bold mb-4 transition-colors {leftActive && rightActive ? 'text-[#22c55e]' : ''}">
                     {formatTime(currentTime)}
                 </div>
                 <div class="text-gray-500 text-sm mb-12 h-6 font-medium">
@@ -261,10 +268,10 @@
                 </div>
 
                 <!-- Touch Zones -->
-                <div class="w-full max-w-xl grid grid-cols-2 gap-6 h-32 md:h-56 transition-opacity duration-200 {isRunning ? 'opacity-0 pointer-events-none' : 'opacity-100'}">
+                <div class="w-full max-w-xl grid grid-cols-2 gap-4 md:gap-6 h-24 sm:h-32 md:h-56 transition-opacity duration-200 {isRunning ? 'opacity-0 pointer-events-none' : 'opacity-100'}">
                     <!-- Left Zone -->
                     <div 
-                        class="touch-zone border-2 border-dashed border-gray-700 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 bg-gray-800/20 transition-all duration-100 {leftActive ? 'bg-green-500/40 border-green-500 scale-95' : ''}"
+                        class="touch-zone border-2 border-dashed border-gray-700 rounded-[2rem] md:rounded-[2.5rem] flex flex-col items-center justify-center gap-2 md:gap-4 bg-gray-800/20 transition-all duration-100 {leftActive ? 'bg-green-500/40 border-green-500 scale-95' : ''}"
                         onmousedown={(e) => handleTouchStart('left', e)}
                         ontouchstart={(e) => handleTouchStart('left', e)}
                         onmouseup={handleTouchEnd}
@@ -279,7 +286,7 @@
                     
                     <!-- Right Zone -->
                     <div 
-                        class="touch-zone border-2 border-dashed border-gray-700 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 bg-gray-800/20 transition-all duration-100 {rightActive ? 'bg-green-500/40 border-green-500 scale-95' : ''}"
+                        class="touch-zone border-2 border-dashed border-gray-700 rounded-[2rem] md:rounded-[2.5rem] flex flex-col items-center justify-center gap-2 md:gap-4 bg-gray-800/20 transition-all duration-100 {rightActive ? 'bg-green-500/40 border-green-500 scale-95' : ''}"
                         onmousedown={(e) => handleTouchStart('right', e)}
                         ontouchstart={(e) => handleTouchStart('right', e)}
                         onmouseup={handleTouchEnd}
@@ -327,8 +334,8 @@
     </main>
 
     <!-- History Panel -->
-    <div class="h-1/3 border-t border-gray-800 bg-black/40 p-6 overflow-y-auto no-scrollbar">
-        <div class="flex justify-between items-center mb-6">
+    <div class="h-1/3 border-t border-gray-800 bg-black/40 p-4 md:p-6 overflow-y-auto no-scrollbar">
+        <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
             <h2 class="text-xs font-black uppercase text-gray-500 tracking-widest flex items-center gap-2">
                 <History class="w-4 h-4" /> {selectedCube} - Historial
             </h2>
@@ -380,16 +387,25 @@
             {:else}
                 {#each history as item, idx (item.date + idx)}
                     {@const isBest = item.time === bestTime}
-                    <div class="flex justify-between items-center bg-gray-800/40 p-4 rounded-2xl border {isBest ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-gray-800/50'}">
+                    <div class="group flex justify-between items-center bg-gray-800/40 p-3 sm:p-4 rounded-2xl border {isBest ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-gray-800/50'}">
                         <div class="flex items-center gap-3">
                             <span class="text-xs font-black {isBest ? 'text-yellow-500' : 'text-gray-600'}">#{history.length - idx}</span>
-                            <span class="text-xl font-bold font-mono {isBest ? 'text-yellow-500' : 'text-blue-400'}">{formatTime(item.time)}</span>
+                            <span class="text-lg sm:text-xl font-bold font-mono {isBest ? 'text-yellow-500' : 'text-blue-400'}">{formatTime(item.time)}</span>
                         </div>
-                        <div class="text-right">
-                            <span class="text-[10px] text-gray-600 block leading-tight font-bold">{item.date}</span>
-                            {#if isBest}
-                                <span class="text-[8px] text-yellow-500 uppercase font-black">Record</span>
-                            {/if}
+                        <div class="flex items-center gap-4">
+                            <div class="text-right hidden sm:block">
+                                <span class="text-[10px] text-gray-600 block leading-tight font-bold">{item.date}</span>
+                                {#if isBest}
+                                    <span class="text-[8px] text-yellow-500 uppercase font-black">Record</span>
+                                {/if}
+                            </div>
+                            <button 
+                                onclick={() => deleteResult(idx)}
+                                class="p-2 text-gray-600 hover:text-red-500 transition-colors"
+                                aria-label="Eliminar resultado"
+                            >
+                                <Trash2 size={16} />
+                            </button>
                         </div>
                     </div>
                 {/each}

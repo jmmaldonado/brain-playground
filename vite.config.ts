@@ -7,11 +7,14 @@ export default defineConfig({
 		sveltekit(),
 		VitePWA({
 			registerType: 'autoUpdate',
+			injectRegister: false,
 			workbox: {
+				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
 				cleanupOutdatedCaches: true
 			},
 			devOptions: {
-				enabled: true
+				enabled: true,
+				type: 'module'
 			},
 			manifest: {
 				name: 'Brain Playground',
@@ -28,6 +31,18 @@ export default defineConfig({
 						src: 'pwa-512x512.png',
 						sizes: '512x512',
 						type: 'image/png'
+					},
+					{
+						src: 'pwa-512x512.png',
+						sizes: '512x512',
+						type: 'image/png',
+						purpose: 'any'
+					},
+					{
+						src: 'pwa-512x512.png',
+						sizes: '512x512',
+						type: 'image/png',
+						purpose: 'maskable'
 					}
 				]
 			}
