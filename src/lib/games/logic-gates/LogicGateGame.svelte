@@ -1,93 +1,167 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import { levels, evaluateCircuit } from './logic';
-    import type { Gate, Connection, Level, GateType } from './types';
-    import GateComponent from './components/Gate.svelte';
-    import { ArrowLeft, Play, RefreshCw, CheckCircle, HelpCircle, Menu, X } from 'lucide-svelte';
+    import { tick } from 'svelte';
+    import { ArrowRight, CheckCircle, Menu, Play, RefreshCw, Trash2, X } from 'lucide-svelte';
+    import { StorageService } from '$lib/services/storage';
+    import GateShape from '../logic-circuits/GateShape.svelte';
+    import {
+        addOrReplaceConnection,
+        canCreateConnection,
+        getGateInputCount,
+        removeGateConnections,
+        sameTerminal,
+    } from '../logic-circuits/engine';
+    import { GATE_HEIGHT, GATE_WIDTH, PORT_HEIGHT, PORT_WIDTH, getLevelBounds, getTerminalPosition, getWirePath } from '../logic-circuits/geometry';
+    import { evaluateTruthTable, levels } from './logic';
+    import type { Connection, GateType, PlacedGate, TerminalRef } from '../logic-circuits/types';
 
-    // State
+    interface Progress {
+        unlockedLevelId: number;
+        completedLevelIds: number[];
+    }
+
+    type SimulationResult = ReturnType<typeof evaluateTruthTable>[number];
+
     let currentLevelIndex = $state(0);
-    let gates = $state<Gate[]>([]);
+    let gates = $state<PlacedGate[]>([]);
     let connections = $state<Connection[]>([]);
+    let selectedTerminal = $state<TerminalRef | null>(null);
+    let selectedConnectionId = $state<string | null>(null);
+    let selectedGateId = $state<string | null>(null);
     let draggingGateId = $state<string | null>(null);
-    // selectedNode tracks the first node tapped in a connection pair
-    // type 'source' = Gate Output or Level Input
-    // type 'sink' = Gate Input or Level Output
-    let selectedNode = $state<{ id: string, type: 'source' | 'sink', index?: number } | null>(null); 
-    let mouseX = $state(0);
-    let mouseY = $state(0);
-    let simulationResults = $state<{ correct: boolean, inputs: boolean[], outputs: boolean[], expected: boolean[] }[] | null>(null);
+    let simulationResults = $state<SimulationResult[] | null>(null);
     let showSuccessModal = $state(false);
-    let showSidebar = $state(false); // For mobile sidebar
-
-    // Pan/Zoom State
+    let showSidebar = $state(false);
+    let progress = $state<Progress>({ unlockedLevelId: 1, completedLevelIds: [] });
     let panX = $state(0);
     let panY = $state(0);
+    let zoom = $state(1);
     let isPanning = $state(false);
-    let lastPanX = 0;
-    let lastPanY = 0;
-
-    let currentLevel = $derived(levels[currentLevelIndex]);
-
-    // Interaction Logic
+    let lastPointerX = 0;
+    let lastPointerY = 0;
     let dragOffsetX = 0;
     let dragOffsetY = 0;
+    let loadedLevelIndex = -1;
     let gameArea: HTMLDivElement | null = null;
 
-    function getCoords(e: MouseEvent | TouchEvent) {
-        if (e instanceof MouseEvent) {
-            return { clientX: e.clientX, clientY: e.clientY };
-        } else if (e.touches && e.touches.length > 0) {
-            return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-        }
-        return { clientX: 0, clientY: 0 };
+    const currentLevel = $derived(levels[currentLevelIndex]);
+
+    $effect(() => {
+        const index = currentLevelIndex;
+        if (loadedLevelIndex !== index) loadLevel(index);
+    });
+
+    function loadLevel(index: number) {
+        loadedLevelIndex = index;
+        gates = [];
+        connections = [];
+        selectedTerminal = null;
+        selectedConnectionId = null;
+        selectedGateId = null;
+        simulationResults = null;
+        showSuccessModal = false;
+        void tick().then(frameBoard);
     }
 
-    function updatePointerPos(e: MouseEvent | TouchEvent) {
-        if (!gameArea) return;
-        
-        const rect = gameArea.getBoundingClientRect();
-        const coords = getCoords(e);
-        
-        // Raw mouse position relative to canvas container
-        const rawX = coords.clientX - rect.left;
-        const rawY = coords.clientY - rect.top;
+    function loadProgress() {
+        const saved = StorageService.load<Progress>('logic-gates', { unlockedLevelId: 1, completedLevelIds: [] });
+        progress = saved ?? { unlockedLevelId: 1, completedLevelIds: [] };
+        currentLevelIndex = Math.max(0, Math.min(levels.length - 1, (progress.unlockedLevelId ?? 1) - 1));
+    }
 
-        // Logical mouse position in the world (accounting for pan)
-        mouseX = rawX - panX;
-        mouseY = rawY - panY;
-        
-        if (draggingGateId) {
-            e.preventDefault(); // Prevent scrolling while dragging
-            const gate = gates.find(g => g.id === draggingGateId);
-            if (gate) {
-                gate.x = mouseX - dragOffsetX;
-                gate.y = mouseY - dragOffsetY;
+    loadProgress();
+
+    function saveProgress(nextProgress: Progress) {
+        progress = nextProgress;
+        StorageService.save('logic-gates', nextProgress);
+    }
+
+    function completeLevel() {
+        const completedLevelIds = Array.from(new Set([...progress.completedLevelIds, currentLevel.id]));
+        saveProgress({
+            completedLevelIds,
+            unlockedLevelId: Math.max(progress.unlockedLevelId, Math.min(levels.length, currentLevel.id + 1)),
+        });
+    }
+
+    function runSimulation() {
+        const results = evaluateTruthTable(currentLevel, gates, connections);
+        simulationResults = results;
+        showSuccessModal = results.every((result) => result.correct);
+        if (showSuccessModal) {
+            completeLevel();
+            if (currentLevelIndex < levels.length - 1) {
+                window.setTimeout(nextLevel, 750);
             }
-        } else if (isPanning) {
-            e.preventDefault();
-            const dx = coords.clientX - lastPanX;
-            const dy = coords.clientY - lastPanY;
-            panX += dx;
-            panY += dy;
-            lastPanX = coords.clientX;
-            lastPanY = coords.clientY;
         }
     }
 
-    function handlePointerDown(e: MouseEvent | TouchEvent) {
-        // Close sidebar if clicking outside
-        if (showSidebar && gameArea && !e.composedPath().some(el => (el as HTMLElement).classList?.contains('sidebar'))) {
-            showSidebar = false;
+    function frameBoard() {
+        if (!gameArea) return;
+        const rect = gameArea.getBoundingClientRect();
+        const bounds = getLevelBounds(currentLevel.inputs, currentLevel.outputs);
+        const boundsWidth = bounds.maxX - bounds.minX;
+        const boundsHeight = bounds.maxY - bounds.minY;
+        zoom = Math.max(0.58, Math.min(1, (rect.width - 32) / boundsWidth, (rect.height - 32) / boundsHeight));
+        panX = (rect.width - boundsWidth * zoom) / 2 - bounds.minX * zoom;
+        panY = Math.max(12, (rect.height - boundsHeight * zoom) / 2 - bounds.minY * zoom);
+    }
+
+    function setZoom(nextZoom: number) {
+        const clamped = Math.max(0.5, Math.min(1.25, nextZoom));
+        if (!gameArea) {
+            zoom = clamped;
+            return;
         }
-        
-        // Deselect if clicking on empty space & Start Panning
-        if (e.target === gameArea || (e.target as Element).tagName === 'svg') {
-            selectedNode = null;
-            isPanning = true;
-            const coords = getCoords(e);
-            lastPanX = coords.clientX;
-            lastPanY = coords.clientY;
+        const rect = gameArea.getBoundingClientRect();
+        const center = {
+            x: (rect.width / 2 - panX) / zoom,
+            y: (rect.height / 2 - panY) / zoom,
+        };
+        zoom = clamped;
+        panX = rect.width / 2 - center.x * zoom;
+        panY = rect.height / 2 - center.y * zoom;
+    }
+
+    function getWorldPoint(event: PointerEvent) {
+        if (!gameArea) return { x: 0, y: 0 };
+        const rect = gameArea.getBoundingClientRect();
+        return {
+            x: (event.clientX - rect.left - panX) / zoom,
+            y: (event.clientY - rect.top - panY) / zoom,
+        };
+    }
+
+    function handleBoardPointerDown(event: PointerEvent) {
+        const target = event.target as HTMLElement;
+        if (target.closest('button,[role="button"]')) return;
+        selectedTerminal = null;
+        selectedConnectionId = null;
+        selectedGateId = null;
+        isPanning = true;
+        lastPointerX = event.clientX;
+        lastPointerY = event.clientY;
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+        if (draggingGateId) {
+            event.preventDefault();
+            const point = getWorldPoint(event);
+            gates = gates.map((gate) =>
+                gate.id === draggingGateId
+                    ? { ...gate, x: point.x - dragOffsetX, y: point.y - dragOffsetY }
+                    : gate,
+            );
+            simulationResults = null;
+            showSuccessModal = false;
+            return;
+        }
+
+        if (isPanning) {
+            event.preventDefault();
+            panX += event.clientX - lastPointerX;
+            panY += event.clientY - lastPointerY;
+            lastPointerX = event.clientX;
+            lastPointerY = event.clientY;
         }
     }
 
@@ -97,396 +171,372 @@
     }
 
     function addGate(type: GateType) {
+        if (!gameArea) return;
+        const rect = gameArea.getBoundingClientRect();
         const id = crypto.randomUUID();
-        gates = [...gates, { 
-            id, 
-            type, 
-            x: 100 + Math.random() * 50, 
-            y: 100 + Math.random() * 50, 
-            inputs: [] 
-        }];
+        gates = [
+            ...gates,
+            {
+                id,
+                type,
+                x: (rect.width / 2 - panX) / zoom - GATE_WIDTH / 2,
+                y: (rect.height / 2 - panY) / zoom - GATE_HEIGHT / 2,
+            },
+        ];
+        selectedGateId = id;
+        selectedConnectionId = null;
+        simulationResults = null;
+        showSuccessModal = false;
+        showSidebar = false;
     }
 
     function removeGate(id: string) {
-        gates = gates.filter(g => g.id !== id);
-        connections = connections.filter(c => c.from !== id && c.to !== id);
-    }
-    
-    // Connection Logic - Bidirectional Tap to Connect
-    
-    // Called when clicking a Signal Source (Gate Output or Level Input)
-    function handleSourceClick(id: string) {
-        if (selectedNode) {
-            if (selectedNode.type === 'sink') {
-                createConnection(id, selectedNode.id, selectedNode.index || 0);
-                selectedNode = null;
-            } else {
-                selectedNode = { id, type: 'source' };
-            }
-        } else {
-            selectedNode = { id, type: 'source' };
-        }
-    }
-
-    // Called when clicking a Signal Sink (Gate Input or Level Output)
-    function handleSinkClick(id: string, index: number) {
-        if (selectedNode) {
-            if (selectedNode.type === 'source') {
-                createConnection(selectedNode.id, id, index);
-                selectedNode = null;
-            } else {
-                selectedNode = { id, type: 'sink', index };
-            }
-        } else {
-            selectedNode = { id, type: 'sink', index };
-        }
-    }
-
-    function createConnection(fromId: string, toId: string, toInputIndex: number) {
-        // Prevent self-connection (basic check)
-        if (fromId === toId) return;
-
-        // Remove existing connection to this input if any
-        connections = connections.filter(c => !(c.to === toId && c.toInputIndex === toInputIndex));
-
-        connections = [...connections, {
-            from: fromId,
-            to: toId,
-            toInputIndex: toInputIndex
-        }];
-    }
-
-    // Drawing connections
-    function getConnectorPos(id: string, isInput: boolean, index: number = 0): { x: number, y: number } {
-        // Check if it's a level input (Source)
-        const levelInput = currentLevel.inputs.find(i => i.id === id);
-        if (levelInput) return { x: levelInput.x + 20, y: levelInput.y }; 
-
-        // Check if it's a level output (Sink)
-        const levelOutput = currentLevel.outputs.find(o => o.id === id);
-        if (levelOutput) return { x: levelOutput.x, y: levelOutput.y };
-
-        // Check if it's a gate
-        const gate = gates.find(g => g.id === id);
-        if (gate) {
-            if (isInput) { // Gate Input (Sink)
-                if (gate.type === 'NOT') return { x: gate.x + 15, y: gate.y + 30 };
-                return { x: gate.x + 10, y: gate.y + (index === 0 ? 15 : 45) };
-            } else { // Gate Output (Source)
-                const hasBubble = ['NOT', 'NAND', 'NOR'].includes(gate.type);
-                if (hasBubble) return { x: gate.x + 68, y: gate.y + 30 };
-                if (gate.type === 'XOR') return { x: gate.x + 62, y: gate.y + 30 };
-                return { x: gate.x + 60, y: gate.y + 30 };
-            }
-        }
-        
-        return { x: 0, y: 0 };
-    }
-
-    function runSimulation() {
-        if (!currentLevel.truthTable) return;
-
-        const results = currentLevel.truthTable.map(testCase => {
-            const actualOutputs = evaluateCircuit(currentLevel, gates, connections, testCase.inputs);
-            
-            // Compare actual vs expected
-            const isCorrect = actualOutputs.every((val, i) => val === testCase.outputs[i]);
-            return {
-                correct: isCorrect,
-                inputs: testCase.inputs,
-                outputs: actualOutputs,
-                expected: testCase.outputs
-            };
-        });
-
-        simulationResults = results;
-        
-        if (results.every(r => r.correct)) {
-            showSuccessModal = true;
-        }
-    }
-
-    function nextLevel() {
-        if (currentLevelIndex < levels.length - 1) {
-            currentLevelIndex++;
-            resetLevel();
-        }
-    }
-
-    function resetLevel() {
-        gates = [];
-        connections = [];
+        gates = gates.filter((gate) => gate.id !== id);
+        connections = removeGateConnections(connections, id);
+        selectedGateId = null;
+        selectedTerminal = null;
         simulationResults = null;
         showSuccessModal = false;
     }
 
+    function startGateDrag(event: PointerEvent, gate: PlacedGate) {
+        if (event.button === 2) {
+            event.preventDefault();
+            removeGate(gate.id);
+            return;
+        }
+
+        event.stopPropagation();
+        const point = getWorldPoint(event);
+        dragOffsetX = point.x - gate.x;
+        dragOffsetY = point.y - gate.y;
+        selectedGateId = gate.id;
+        selectedConnectionId = null;
+        draggingGateId = gate.id;
+    }
+
+    function tapTerminal(ref: TerminalRef) {
+        selectedConnectionId = null;
+        selectedGateId = null;
+
+        if (!selectedTerminal) {
+            selectedTerminal = ref;
+            return;
+        }
+
+        if (sameTerminal(selectedTerminal, ref)) {
+            selectedTerminal = null;
+            return;
+        }
+
+        if (canCreateConnection(selectedTerminal, ref, gates, connections)) {
+            connections = addOrReplaceConnection(connections, selectedTerminal, ref, gates);
+            selectedTerminal = null;
+            simulationResults = null;
+            showSuccessModal = false;
+            return;
+        }
+
+        selectedTerminal = ref;
+    }
+
+    function terminalIsSelected(ref: TerminalRef) {
+        return selectedTerminal ? sameTerminal(selectedTerminal, ref) : false;
+    }
+
+    function terminalIsCompatible(ref: TerminalRef) {
+        return !selectedTerminal || canCreateConnection(selectedTerminal, ref, gates, connections);
+    }
+
+    function terminalClass(ref: TerminalRef) {
+        const selected = terminalIsSelected(ref);
+        const compatible = terminalIsCompatible(ref);
+        const base = ref.role === 'source' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-pink-500 bg-pink-50 text-pink-700';
+        if (selected) return `${base} ring-4 ring-sky-200`;
+        if (!compatible) return 'border-slate-200 bg-slate-100 text-slate-300 opacity-45';
+        return `${base} hover:scale-105`;
+    }
+
+    function sourceRef(nodeId: string): TerminalRef {
+        return { nodeId, role: 'source', index: 0 };
+    }
+
+    function sinkRef(nodeId: string, index = 0): TerminalRef {
+        return { nodeId, role: 'sink', index };
+    }
+
+    function terminalPosition(ref: TerminalRef) {
+        return getTerminalPosition(ref, gates, currentLevel.inputs, currentLevel.outputs);
+    }
+
+    function removeSelectedConnection() {
+        if (!selectedConnectionId) return;
+        connections = connections.filter((connection) => connection.id !== selectedConnectionId);
+        selectedConnectionId = null;
+        simulationResults = null;
+        showSuccessModal = false;
+    }
+
+    function resetLevel() {
+        loadLevel(currentLevelIndex);
+    }
+
+    function nextLevel() {
+        if (currentLevelIndex < levels.length - 1) currentLevelIndex += 1;
+    }
 </script>
 
-    <div 
-        class="flex flex-col h-[calc(100vh-80px)] bg-slate-50 relative overflow-hidden"
-        onpointerdown={(e) => { 
-            // Close sidebar if clicking outside
-            if (showSidebar && gameArea && !e.composedPath().some(el => (el as HTMLElement).classList?.contains('sidebar'))) {
-                showSidebar = false;
-            }
-            // Deselect if clicking on empty space
-            if (e.target === gameArea || (e.target as Element).tagName === 'svg') {
-                selectedNode = null;
-            }
-        }}
-    >
-    <!-- Header -->
-        <div class="bg-white border-b px-4 py-3 flex justify-between items-center shadow-sm z-10 sm:px-6 sm:py-4">
-            <div class="flex items-center gap-2">
-                <!-- Toggle button visible only on small screens -->
-                <button class="md:hidden p-2 -ml-2 rounded-md text-gray-700 hover:bg-gray-100" onclick={() => showSidebar = !showSidebar}>
-                    {#if showSidebar}
-                        <X size={24} />
-                    {:else}
-                        <Menu size={24} />
-                    {/if}
-                </button>
-                <div>
-                    <h1 class="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2">
-                        Level {currentLevel.id}: {currentLevel.title}
-                    </h1>
-                    <p class="text-gray-600 text-xs sm:text-sm">{currentLevel.description}</p>
-                </div>
-            </div>
-            <div class="flex gap-2 sm:gap-4">
-                 <button class="btn bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 sm:px-4 sm:py-2 rounded-lg flex items-center gap-2 text-sm" onclick={resetLevel}>
-                    <RefreshCw size={16} /> <span class="hidden sm:inline">Reset</span>
-                </button>
-                <button class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 sm:px-6 sm:py-2 rounded-lg flex items-center gap-2 shadow-lg text-sm" onclick={runSimulation}>
-                    <Play size={16} /> <span class="hidden sm:inline">Test Circuit</span>
-                </button>
+<div class="flex h-[calc(100vh-80px)] flex-col overflow-hidden bg-slate-50">
+    <div class="z-20 flex items-center justify-between gap-3 border-b bg-white px-3 py-3 shadow-sm sm:px-5">
+        <div class="flex min-w-0 items-center gap-2">
+            <button
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100 md:hidden"
+                aria-label="Toggle components"
+                onclick={() => (showSidebar = !showSidebar)}>
+                {#if showSidebar}<X size={22} />{:else}<Menu size={22} />{/if}
+            </button>
+            <div class="min-w-0">
+                <h1 class="truncate text-lg font-black text-slate-900 sm:text-2xl">Level {currentLevel.id}: {currentLevel.title}</h1>
+                <p class="line-clamp-2 text-xs text-slate-600 sm:text-sm">{currentLevel.description}</p>
             </div>
         </div>
+        <div class="flex shrink-0 items-center gap-2">
+            <select
+                class="hidden rounded-md border border-slate-200 bg-white px-2 py-2 text-sm font-bold text-slate-700 sm:block"
+                bind:value={currentLevelIndex}
+                aria-label="Select level">
+                {#each levels as level, index}
+                    <option value={index}>Level {level.id}</option>
+                {/each}
+            </select>
+            <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300" aria-label="Reset level" onclick={resetLevel}>
+                <RefreshCw size={17} />
+            </button>
+            <button type="button" class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-black text-white hover:bg-blue-700" onclick={runSimulation}>
+                <Play size={17} /><span class="hidden sm:inline">Test</span>
+            </button>
+        </div>
+    </div>
 
-        <!-- Game Area -->
-        <div class="flex-1 flex overflow-hidden">
-            <!-- Sidebar - Component Palette -->
-            <div 
-                class="{`sidebar w-48 bg-white border-r p-4 flex-col gap-4 overflow-y-auto z-20 shadow-inner 
-                        fixed h-full top-0 left-0 transition-transform duration-300 ease-in-out md:relative md:flex md:translate-x-0
-                        ${showSidebar ? 'flex translate-x-0' : 'hidden -translate-x-full'}`}"
-            >
-                <h3 class="font-bold text-gray-700 mb-2">Components</h3>
+    <div class="relative flex min-h-0 flex-1 overflow-hidden">
+        <aside
+            class={`sidebar absolute inset-y-0 left-0 z-30 w-52 border-r bg-white p-3 shadow-xl transition-transform md:relative md:block md:translate-x-0 md:shadow-none ${
+                showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+            }`}>
+            <h2 class="mb-3 text-sm font-black uppercase tracking-wide text-slate-500">Components</h2>
+            <div class="grid gap-2">
                 {#each currentLevel.availableGates as gateType}
-                    <button 
-                        class="p-3 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all flex flex-col items-center gap-2 text-sm"
-                        onclick={() => addGate(gateType)}
-                    >
-                        <div class="w-12 h-10 relative">
-                            <!-- Preview (Simplified) -->
-                            <div class="text-xs font-bold text-center mt-2">{gateType}</div>
-                        </div>
-                        <span class="text-sm font-medium text-gray-600">Add {gateType}</span>
+                    <button
+                        type="button"
+                        class="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3 text-left font-black text-slate-700 hover:border-blue-500 hover:bg-blue-50"
+                        onclick={() => addGate(gateType)}>
+                        Add {gateType}
                     </button>
                 {/each}
             </div>
+        </aside>
 
-        <!-- Canvas -->
-        <div 
-            class="flex-1 bg-slate-50 relative cursor-move overflow-hidden touch-none"
+        <div
+            class="relative min-w-0 flex-1 touch-none overflow-hidden bg-slate-50"
             bind:this={gameArea}
-            onpointerdown={handlePointerDown}
-            onpointermove={updatePointerPos}
+            onpointerdown={handleBoardPointerDown}
+            onpointermove={handlePointerMove}
             onpointerup={handlePointerUp}
+            onpointercancel={handlePointerUp}
             onpointerleave={handlePointerUp}
-            role="application"
-        >
-             <!-- Grid Background -->
-            <div class="absolute inset-0 opacity-10 pointer-events-none" 
-                 style="background-image: radial-gradient(#64748b 1px, transparent 1px); background-size: 20px 20px; background-position: {panX}px {panY}px;">
+            role="application">
+            <div
+                class="absolute inset-0 pointer-events-none opacity-20"
+                style="background-image: radial-gradient(#64748b 1px, transparent 1px); background-size: 20px 20px; background-position: {panX}px {panY}px;">
             </div>
 
-            <!-- Panning Container -->
-            <div style="transform: translate({panX}px, {panY}px); width: 100%; height: 100%; pointer-events: none;">
+            <div class="absolute left-0 top-0 h-[560px] w-[760px]" style="transform: translate({panX}px, {panY}px) scale({zoom}); transform-origin: 0 0;">
+                <svg class="absolute inset-0 h-full w-full overflow-visible">
+                    {#each connections as connection}
+                        {@const from = terminalPosition(connection.from)}
+                        {@const to = terminalPosition(connection.to)}
+                        <path
+                            d={getWirePath(from, to)}
+                            fill="none"
+                            stroke={selectedConnectionId === connection.id ? '#0f172a' : '#64748b'}
+                            stroke-width={selectedConnectionId === connection.id ? '5' : '3'}
+                        />
+                        <path
+                            d={getWirePath(from, to)}
+                            fill="none"
+                            stroke="transparent"
+                            stroke-width="24"
+                            class="cursor-pointer"
+                            role="button"
+                            tabindex="0"
+                            aria-label="Select wire"
+                            onkeydown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    selectedConnectionId = connection.id;
+                                    selectedTerminal = null;
+                                    selectedGateId = null;
+                                }
+                            }}
+                            onclick={() => {
+                                selectedConnectionId = connection.id;
+                                selectedTerminal = null;
+                                selectedGateId = null;
+                            }}
+                        />
+                    {/each}
+                </svg>
 
-            <svg class="w-full h-full pointer-events-none overflow-visible">
-                <defs>
-                    <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
-                        <polygon points="0 0, 6 2, 0 4" fill="#94a3b8" />
-                    </marker>
-                </defs>
-
-                <!-- Connections -->
-                {#each connections as conn}
-                    {@const fromPos = (currentLevel.inputs.find(i => i.id === conn.from)) 
-                        ? getConnectorPos(conn.from, false) // Level input is a source (output for connection purposes)
-                        : getConnectorPos(conn.from, false) // Gate output is a source
-                    }
-                    {@const toPos = (currentLevel.outputs.find(o => o.id === conn.to)) 
-                        ? getConnectorPos(conn.to, true, conn.toInputIndex) // Level output is a sink (input for connection purposes)
-                        : getConnectorPos(conn.to, true, conn.toInputIndex) // Gate input is a sink
-                    }
-                    <path 
-                        d={`M ${fromPos.x} ${fromPos.y} C ${fromPos.x + 50} ${fromPos.y}, ${toPos.x - 50} ${toPos.y}, ${toPos.x} ${toPos.y}`}
-                        fill="none" 
-                        stroke="#64748b" 
-                        stroke-width="3"
-                        marker-end="url(#arrowhead)"
-                    />
-                {/each}
-
-                <!-- Active Selection Highlight -->
-                {#if selectedNode}
-                    <!-- Calculate position for highlight -->
-                    {@const pos = getConnectorPos(selectedNode.id, selectedNode.type === 'sink', selectedNode.index)}
-                    
-                    <!-- Highlight Ring (Subtle) -->
-                    <circle 
-                        cx={pos.x} 
-                        cy={pos.y} 
-                        r="8" 
-                        fill="none" 
-                        stroke={selectedNode.type === 'source' ? '#3b82f6' : '#ec4899'} 
-                        stroke-width="3" 
-                        class="opacity-80 pointer-events-none" 
-                    />
-                {/if}
-            </svg>
-            
-            <!-- Interactive Elements Layer (HTML/Svelte over SVG) -->
-            <div class="absolute inset-0 pointer-events-none overflow-visible">
-                <!-- Level Inputs -->
                 {#each currentLevel.inputs as input}
-                    <div 
-                        class="absolute pointer-events-auto transform -translate-y-1/2"
-                        style="left: {input.x}px; top: {input.y}px;"
-                    >
-                         <div class="flex items-center gap-2">
-                            <div class="w-10 h-10 bg-white border-2 border-gray-800 rounded flex items-center justify-center font-bold text-lg shadow-sm">
-                                {input.label}
-                            </div>
-                            <div 
-                                class={`w-8 h-8 sm:w-5 sm:h-5 border-2 rounded-full cursor-pointer pointer-events-auto transition-colors ${selectedNode?.id === input.id ? 'bg-blue-200 border-blue-500' : 'bg-gray-200 border-gray-400 hover:border-blue-500'}`}
-                                onpointerdown={(e) => { e.stopPropagation(); handleSourceClick(input.id); }}
-                                role="button"
-                                tabindex="0"
-                            ></div>
+                    <div class="absolute" style="left: {input.x}px; top: {input.y}px; width: {PORT_WIDTH}px; height: {PORT_HEIGHT}px;">
+                        <div class="flex h-full w-full flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-sm font-black text-slate-700 shadow-sm">
+                            <span>{input.label}</span>
+                            <span class="text-xs text-slate-500">INPUT</span>
                         </div>
                     </div>
-                {/each}
-
-                 <!-- Level Outputs -->
-                 {#each currentLevel.outputs as output}
-                    <div 
-                        class="absolute pointer-events-auto transform -translate-y-1/2 -translate-x-full"
-                        style="left: {output.x}px; top: {output.y}px;"
-                    >
-                         <div class="flex items-center gap-2 flex-row-reverse">
-                            <div class="w-10 h-10 bg-white border-2 border-gray-800 rounded flex items-center justify-center font-bold text-lg shadow-sm">
-                                {output.label}
-                                {#if output.required}
-                                    <span class="absolute -top-2 -right-2 text-xs bg-yellow-400 text-yellow-900 px-1 rounded-full border border-yellow-500">Req</span>
-                                {/if}
-                            </div>
-                            <div 
-                                class="w-8 h-8 sm:w-5 sm:h-5 bg-gray-200 border-2 border-gray-400 rounded-full cursor-pointer pointer-events-auto hover:bg-blue-200 hover:border-blue-500 transition-colors"
-                                onpointerdown={(e) => { e.stopPropagation(); handleSinkClick(output.id, 0); }}
-                                role="button"
-                                tabindex="0"
-                            ></div>
-                        </div>
-                    </div>
-                {/each}
-            </div>
-
-            <!-- Gates SVG Layer -->
-             <svg class="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
-                {#each gates as gate (gate.id)}
-                    <GateComponent 
-                        type={gate.type} 
-                        x={gate.x} 
-                        y={gate.y}
-                        onPointerDown={(e: PointerEvent) => {
-                             if(e.button === 2) { // Right click for context menu (e.g., delete)
-                                e.preventDefault();
-                                removeGate(gate.id);
-                                return;
-                             }
-                             const rect = (e.target as Element).closest('svg')?.getBoundingClientRect();
-                             if(rect) {
-                                const coords = getCoords(e);
-                                dragOffsetX = coords.clientX - rect.left - gate.x;
-                                dragOffsetY = coords.clientY - rect.top - gate.y;
-                             }
-                             draggingGateId = gate.id; 
-                        }}
-                        onInputClick={(idx) => handleSinkClick(gate.id, idx)}
-                        onOutputClick={() => handleSourceClick(gate.id)}
-                    />
-                {/each}
-            </svg>
-            
-            </div> <!-- End Panning Container -->
-        </div>
-    </div>
-
-    <!-- Truth Table / Results Panel -->
-    <div class="bg-white border-t p-4 h-48 overflow-y-auto sm:h-60">
-        <h3 class="font-bold text-gray-800 mb-2 text-lg">Truth Table</h3>
-        {#if simulationResults}
-            <div class="flex flex-wrap gap-3 sm:gap-4">
-                {#each simulationResults as res, i}
-                    <div class={`flex flex-col items-center p-2 rounded border ${res.correct ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} text-xs sm:text-sm`}>
-                        <div class="font-mono mb-1 text-gray-500">Case {i+1}</div>
-                        <div class="flex gap-2 font-bold">
-                             <div class="flex flex-col items-center">
-                                <span class="text-xs text-gray-400">IN</span>
-                                <span>{res.inputs.map(b => b ? '1' : '0').join(' ')}</span>
-                            </div>
-                            <div class="text-gray-300">→</div>
-                            <div class="flex flex-col items-center">
-                                <span class="text-xs text-gray-400">OUT</span>
-                                <span class={res.correct ? 'text-green-700' : 'text-red-700'}>{res.outputs.map(b => b ? '1' : '0').join(' ')}</span>
-                            </div>
-                        </div>
-                        <div class="text-xs mt-1 {res.correct ? 'text-green-600' : 'text-red-600'}">
-                            {res.correct ? 'Match' : `Expected ${res.expected.map(b => b ? '1' : '0').join(' ')}`}
-                        </div>
-                    </div>
-                {/each}
-            </div>
-        {:else}
-            <div class="text-gray-400 italic text-sm">Run simulation to see results.</div>
-             <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-2 opacity-50">
-                 <!-- Preview of truth table requirements -->
-                 {#if currentLevel.truthTable}
-                     {#each currentLevel.truthTable as row}
-                        <div class="border rounded p-1 text-xs text-center bg-gray-50">
-                            {row.inputs.map(i=>i?'1':'0').join(' ')} → {row.outputs.map(o=>o?'1':'0').join(' ')}
-                        </div>
-                     {/each}
-                 {/if}
-             </div>
-        {/if}
-    </div>
-
-    <!-- Success Modal -->
-    {#if showSuccessModal}
-        <div class="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center transform scale-100 transition-transform">
-                <CheckCircle class="w-16 h-16 text-green-500 mx-auto mb-4" />
-                <h2 class="text-3xl font-bold text-gray-800 mb-2">Level Complete!</h2>
-                <p class="text-gray-600 mb-6">You've successfully built the circuit!</p>
-                <div class="flex justify-center gap-4">
-                     <button class="btn bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg" onclick={() => showSuccessModal = false}>
-                        Stay Here
+                    {@const ref = sourceRef(input.id)}
+                    {@const pos = terminalPosition(ref)}
+                    <button
+                        type="button"
+                        class={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-sm transition ${terminalClass(ref)}`}
+                        style="left: {pos.x}px; top: {pos.y}px;"
+                        aria-label={`${input.label} output terminal`}
+                        onclick={() => tapTerminal(ref)}>
+                        <span class="h-2 w-2 rounded-full bg-current opacity-70"></span>
                     </button>
-                    {#if currentLevelIndex < levels.length - 1}
-                        <button class="btn bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 shadow-lg" onclick={nextLevel}>
-                            Next Level <ArrowLeft class="rotate-180" size={18} />
+                {/each}
+
+                {#each currentLevel.outputs as output}
+                    <div class="absolute" style="left: {output.x}px; top: {output.y}px; width: {PORT_WIDTH}px; height: {PORT_HEIGHT}px;">
+                        <div class="flex h-full w-full flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-sm font-black text-slate-700 shadow-sm">
+                            <span>{output.label}</span>
+                            <span class="text-xs text-slate-500">OUTPUT</span>
+                        </div>
+                    </div>
+                    {@const ref = sinkRef(output.id)}
+                    {@const pos = terminalPosition(ref)}
+                    <button
+                        type="button"
+                        class={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-sm transition ${terminalClass(ref)}`}
+                        style="left: {pos.x}px; top: {pos.y}px;"
+                        aria-label={`${output.label} input terminal`}
+                        onclick={() => tapTerminal(ref)}>
+                        <span class="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                    </button>
+                {/each}
+
+                {#each gates as gate (gate.id)}
+                    <div
+                        class={`absolute cursor-grab rounded-lg p-1 active:cursor-grabbing ${selectedGateId === gate.id ? 'ring-4 ring-sky-200' : ''}`}
+                        style="left: {gate.x}px; top: {gate.y}px; width: {GATE_WIDTH}px; height: {GATE_HEIGHT}px;"
+                        onpointerdown={(event) => startGateDrag(event, gate)}
+                        oncontextmenu={(event) => event.preventDefault()}
+                        role="button"
+                        tabindex="0"
+                        aria-label={`${gate.type} gate`}>
+                        <GateShape type={gate.type} />
+                    </div>
+                    {#each Array.from({ length: getGateInputCount(gate.type) }) as _, index}
+                        {@const ref = sinkRef(gate.id, index)}
+                        {@const pos = terminalPosition(ref)}
+                        <button
+                            type="button"
+                            class={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-sm transition ${terminalClass(ref)}`}
+                            style="left: {pos.x}px; top: {pos.y}px;"
+                            aria-label={`${gate.type} input ${index + 1}`}
+                            onclick={() => tapTerminal(ref)}>
+                            <span class="h-2 w-2 rounded-full bg-current opacity-70"></span>
                         </button>
-                    {:else}
-                         <button class="btn bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 shadow-lg" onclick={() => alert("You finished all levels! Great job!")}>
-                            Finish Game
+                    {/each}
+                    {@const ref = sourceRef(gate.id)}
+                    {@const pos = terminalPosition(ref)}
+                    <button
+                        type="button"
+                        class={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-sm transition ${terminalClass(ref)}`}
+                        style="left: {pos.x}px; top: {pos.y}px;"
+                        aria-label={`${gate.type} output`}
+                        onclick={() => tapTerminal(ref)}>
+                        <span class="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                    </button>
+                {/each}
+
+                {#if selectedGateId}
+                    {@const gate = gates.find((candidate) => candidate.id === selectedGateId)}
+                    {#if gate}
+                        <button
+                            type="button"
+                            class="absolute inline-flex h-10 items-center gap-2 rounded-md bg-red-600 px-3 text-sm font-black text-white shadow-lg hover:bg-red-700"
+                            style="left: {gate.x}px; top: {gate.y - 48}px;"
+                            onclick={() => removeGate(gate.id)}>
+                            <Trash2 size={16} /> Gate
                         </button>
                     {/if}
+                {/if}
+
+                {#if selectedConnectionId}
+                    {@const connection = connections.find((candidate) => candidate.id === selectedConnectionId)}
+                    {#if connection}
+                        {@const from = terminalPosition(connection.from)}
+                        {@const to = terminalPosition(connection.to)}
+                        <button
+                            type="button"
+                            class="absolute inline-flex h-10 items-center gap-2 rounded-md bg-red-600 px-3 text-sm font-black text-white shadow-lg hover:bg-red-700"
+                            style="left: {(from.x + to.x) / 2 - 48}px; top: {(from.y + to.y) / 2 - 48}px;"
+                            onclick={removeSelectedConnection}>
+                            <Trash2 size={16} /> Wire
+                        </button>
+                    {/if}
+                {/if}
+            </div>
+
+            {#if selectedTerminal}
+                <div class="absolute bottom-3 left-3 right-3 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-md sm:left-auto sm:right-3 sm:w-80">
+                    Select a compatible {selectedTerminal.role === 'source' ? 'input' : 'output'} terminal to connect, or tap the board to cancel.
                 </div>
+            {/if}
+            <div class="absolute right-3 top-3 z-20 flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                <button type="button" class="h-9 w-9 text-lg font-black text-slate-700 hover:bg-slate-50" aria-label="Zoom out" onclick={() => setZoom(zoom - 0.12)}>-</button>
+                <div class="min-w-12 border-x border-slate-200 px-2 text-center text-xs font-black text-slate-600">{Math.round(zoom * 100)}%</div>
+                <button type="button" class="h-9 w-9 text-lg font-black text-slate-700 hover:bg-slate-50" aria-label="Zoom in" onclick={() => setZoom(zoom + 0.12)}>+</button>
             </div>
         </div>
-    {/if}
+    </div>
+
+    <div class="grid grid-cols-2 gap-2 border-t bg-white p-2 md:hidden">
+        {#each currentLevel.availableGates as gateType}
+            <button type="button" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-black text-slate-700" onclick={() => addGate(gateType)}>
+                Add {gateType}
+            </button>
+        {/each}
+    </div>
+
+    <div class="h-44 overflow-y-auto border-t bg-white p-3 sm:h-52">
+        <div class="mb-2 flex items-center justify-between gap-3">
+            <h2 class="text-base font-black text-slate-900">Truth Table</h2>
+            {#if showSuccessModal}
+                <div class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-sm font-black text-emerald-700">
+                    <CheckCircle size={16} /> Complete
+                </div>
+            {/if}
+        </div>
+        <div class="flex flex-wrap gap-2">
+            {#if simulationResults}
+                {#each simulationResults as result, index}
+                    <div class={`rounded-lg border px-3 py-2 text-sm ${result.correct ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
+                        <div class="font-mono text-xs text-slate-500">Case {index + 1}</div>
+                        <div class="font-black text-slate-800">{result.inputs.map((value) => (value ? '1' : '0')).join(' ')} -> {result.outputs.map((value) => (value ? '1' : '0')).join(' ')}</div>
+                        <div class={`text-xs font-bold ${result.correct ? 'text-emerald-700' : 'text-red-700'}`}>
+                            {result.correct ? 'Match' : `Expected ${result.expected.map((value) => (value ? '1' : '0')).join(' ')}`}
+                        </div>
+                    </div>
+                {/each}
+            {:else}
+                {#each currentLevel.truthTable as row}
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                        <span class="font-mono text-slate-700">{row.inputs.map((value) => (value ? '1' : '0')).join(' ')} -> {row.outputs.map((value) => (value ? '1' : '0')).join(' ')}</span>
+                    </div>
+                {/each}
+            {/if}
+        </div>
+    </div>
 </div>

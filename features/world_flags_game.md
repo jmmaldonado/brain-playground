@@ -16,6 +16,9 @@ Add a geography game that helps players learn world flags while fitting the exis
   - Each mistake spends one life.
   - When lives run out, the result screen shows score, best run streak, mistakes, and level.
 - Correct answers show a short celebration with points earned.
+- In written/speech mode, an incorrect answer locks the check action until the next country so the revealed answer cannot be copied back into the input.
+- Lives-mode results show correct answers instead of mistakes.
+- Four-flag choice selection is cleared when moving to the next country so the previous button does not remain visually selected.
 - Hints in challenge modes:
   - Continent.
   - First letter.

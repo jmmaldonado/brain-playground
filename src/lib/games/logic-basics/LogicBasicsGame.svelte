@@ -1,463 +1,612 @@
 <script lang="ts">
-    import { onMount, untrack } from 'svelte';
-    import { levels, evaluateCircuit } from './logic';
-    import type { Gate, Switch, Output, Connection, Level, GateType } from './types';
-    import GateComponent from './components/Gate.svelte';
-    import SwitchComponent from './components/Switch.svelte';
-    import OutputComponent from './components/Output.svelte';
-    import { ArrowLeft, RefreshCw, CheckCircle, Menu, X, Zap } from 'lucide-svelte';
+    import { tick } from 'svelte';
+    import { ArrowRight, CheckCircle, Menu, RefreshCw, Trash2, X, Zap } from 'lucide-svelte';
+    import { StorageService } from '$lib/services/storage';
+    import GateShape from '../logic-circuits/GateShape.svelte';
+    import {
+        addOrReplaceConnection,
+        canCreateConnection,
+        getGateInputCount,
+        makeTerminalId,
+        removeGateConnections,
+        sameTerminal,
+    } from '../logic-circuits/engine';
+    import { GATE_HEIGHT, GATE_WIDTH, PORT_HEIGHT, PORT_WIDTH, getLevelBounds, getTerminalPosition, getWirePath } from '../logic-circuits/geometry';
+    import { evaluateCircuit, levels } from './logic';
+    import type { BasicSwitch } from './types';
+    import type { Connection, GateType, PlacedGate, TerminalRef } from '../logic-circuits/types';
 
-    // State
+    interface Progress {
+        unlockedLevelId: number;
+        completedLevelIds: number[];
+    }
+
     let currentLevelIndex = $state(0);
-    let gates = $state<Gate[]>([]);
-    let switches = $state<Switch[]>([]);
-    let outputs = $state<Output[]>([]);
+    let gates = $state<PlacedGate[]>([]);
     let connections = $state<Connection[]>([]);
+    let selectedTerminal = $state<TerminalRef | null>(null);
+    let selectedConnectionId = $state<string | null>(null);
+    let selectedGateId = $state<string | null>(null);
     let draggingGateId = $state<string | null>(null);
+    let switchStates = $state<Record<string, boolean>>({});
     let gateStates = $state<Record<string, boolean>>({});
-    
-    // Connection State
-    let selectedNode = $state<{ id: string, type: 'source' | 'sink', index?: number } | null>(null);
-    let mouseX = $state(0);
-    let mouseY = $state(0);
+    let outputStates = $state<Record<string, boolean>>({});
     let isLevelComplete = $state(false);
     let showSidebar = $state(false);
-    let gameArea: HTMLDivElement | null = null;
-    let dragOffsetX = 0;
-    let dragOffsetY = 0;
-    
-    // Pan/Zoom State
+    let progress = $state<Progress>({ unlockedLevelId: 1, completedLevelIds: [] });
     let panX = $state(0);
     let panY = $state(0);
+    let zoom = $state(1);
     let isPanning = $state(false);
-    let lastPanX = 0;
-    let lastPanY = 0;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    let loadedLevelIndex = -1;
+    let validatedRows = $state<string[]>([]);
+    let gameArea: HTMLDivElement | null = null;
 
-    let currentLevel = $derived(levels[currentLevelIndex]);
+    const currentLevel = $derived(levels[currentLevelIndex]);
 
     $effect(() => {
-        // Initialize level when index changes
-        // We track currentLevelIndex, but untrack the loading logic to avoid 
-        // infinite loops since loadLevel modifies state that it also reads (via updateCircuit)
-        const idx = currentLevelIndex;
-        untrack(() => loadLevel(idx));
+        const index = currentLevelIndex;
+        if (loadedLevelIndex !== index) loadLevel(index);
+    });
+
+    $effect(() => {
+        currentLevel;
+        gates;
+        connections;
+        switchStates;
+        updateCircuit();
     });
 
     function loadLevel(index: number) {
-        const lvl = levels[index];
+        loadedLevelIndex = index;
         gates = [];
         connections = [];
-        
-        // Deep copy switches and outputs to reset their state
-        switches = lvl.switches.map(s => ({ ...s, state: false }));
-        outputs = lvl.outputs.map(o => ({ ...o, state: false }));
-        
-        gateStates = {};
+        selectedTerminal = null;
+        selectedConnectionId = null;
+        selectedGateId = null;
+        switchStates = Object.fromEntries(levels[index].switches.map((sw) => [sw.id, false]));
         isLevelComplete = false;
-        selectedNode = null;
-        
-        updateCircuit();
+        validatedRows = [];
+        void tick().then(frameBoard);
+    }
+
+    function loadProgress() {
+        const saved = StorageService.load<Progress>('logic-basics', { unlockedLevelId: 1, completedLevelIds: [] });
+        progress = saved ?? { unlockedLevelId: 1, completedLevelIds: [] };
+        currentLevelIndex = Math.max(0, Math.min(levels.length - 1, (progress.unlockedLevelId ?? 1) - 1));
+    }
+
+    loadProgress();
+
+    function saveProgress(nextProgress: Progress) {
+        progress = nextProgress;
+        StorageService.save('logic-basics', nextProgress);
+    }
+
+    function completeLevel() {
+        if (isLevelComplete) return;
+        isLevelComplete = true;
+        const completedLevelIds = Array.from(new Set([...progress.completedLevelIds, currentLevel.id]));
+        saveProgress({
+            completedLevelIds,
+            unlockedLevelId: Math.max(progress.unlockedLevelId, Math.min(levels.length, currentLevel.id + 1)),
+        });
+    }
+
+    function rowKey(inputs: boolean[]) {
+        return inputs.map((value) => (value ? '1' : '0')).join('');
+    }
+
+    function invalidateValidation() {
+        validatedRows = [];
+        isLevelComplete = false;
     }
 
     function updateCircuit() {
-        const result = evaluateCircuit(gates, switches, outputs, connections);
-        gateStates = result.gateStates;
-        
-        // Update output states
-        outputs = outputs.map(o => ({
-            ...o,
-            state: result.outputStates[o.id] || false
-        }));
+        const live = evaluateCircuit(currentLevel, gates, connections, switchStates);
+        gateStates = live.gateStates;
+        outputStates = live.outputStates;
 
-        // Check win condition
-        if (!isLevelComplete && currentLevel.goal(switches, outputs)) {
-            isLevelComplete = true;
-        }
-    }
+        const currentRow = currentLevel.truthTable.find((row) => {
+            return row.inputs.every((expected, index) => switchStates[currentLevel.switches[index].id] === expected);
+        });
 
-    function toggleSwitch(id: string) {
-        const sw = switches.find(s => s.id === id);
-        if (sw) {
-            if (sw.type === 'toggle') {
-                sw.state = !sw.state;
-            } else {
-                // Pulse handled via mouse events separately if needed, 
-                // but simpler for now: Click = Toggle for 'toggle', Hold not implemented yet
-                // Let's implement Pulse logic here roughly: click = momentary 1?
-                // Actually 'pulse' usually means press-hold-release.
-                // For touch devices, toggle is easier. Let's make pulse act like a toggle for now or fix it.
-                // Re-reading requirements: "push buttons with temporary behavior - 1 when pressing, 0 when released"
-                // This requires mousedown/mouseup listeners on the switch component.
+        if (currentRow) {
+            const rowMatches = currentLevel.outputs.every((output, index) => live.outputStates[output.id] === currentRow.outputs[index]);
+            const key = rowKey(currentRow.inputs);
+            if (rowMatches && !validatedRows.includes(key)) {
+                validatedRows = [...validatedRows, key];
             }
-            updateCircuit();
         }
-    }
-    
-    // Pulse Switch Handlers
-    function startPulse(id: string) {
-         const sw = switches.find(s => s.id === id);
-         if (sw && sw.type === 'pulse') {
-             sw.state = true;
-             updateCircuit();
-         } else if (sw && sw.type === 'toggle') {
-             toggleSwitch(id);
-         }
-    }
-    
-    function endPulse(id: string) {
-         const sw = switches.find(s => s.id === id);
-         if (sw && sw.type === 'pulse') {
-             sw.state = false;
-             updateCircuit();
-         }
+
+        if (currentLevel.truthTable.every((row) => validatedRows.includes(rowKey(row.inputs)))) completeLevel();
     }
 
-    function addGate(type: GateType) {
-        const id = crypto.randomUUID();
-        gates = [...gates, { 
-            id, 
-            type, 
-            x: 200 + Math.random() * 50, 
-            y: 200 + Math.random() * 50 
-        }];
-        updateCircuit();
-    }
-
-    function removeGate(id: string) {
-        gates = gates.filter(g => g.id !== id);
-        connections = connections.filter(c => c.from !== id && c.to !== id);
-        updateCircuit();
-    }
-
-    // --- Interaction ---
-
-    function getCoords(e: MouseEvent | TouchEvent) {
-        if (e instanceof MouseEvent) {
-            return { clientX: e.clientX, clientY: e.clientY };
-        } else if (e.touches && e.touches.length > 0) {
-            return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-        }
-        return { clientX: 0, clientY: 0 };
-    }
-
-    function updatePointerPos(e: MouseEvent | TouchEvent) {
+    function frameBoard() {
         if (!gameArea) return;
         const rect = gameArea.getBoundingClientRect();
-        const coords = getCoords(e);
-        
-        // Raw mouse position relative to canvas container
-        const rawX = coords.clientX - rect.left;
-        const rawY = coords.clientY - rect.top;
-
-        // Logical mouse position in the world (accounting for pan)
-        mouseX = rawX - panX;
-        mouseY = rawY - panY;
-        
-        if (draggingGateId) {
-            e.preventDefault(); 
-            const gate = gates.find(g => g.id === draggingGateId);
-            if (gate) {
-                gate.x = mouseX - dragOffsetX;
-                gate.y = mouseY - dragOffsetY;
-            }
-        } else if (isPanning) {
-            e.preventDefault();
-            const dx = coords.clientX - lastPanX;
-            const dy = coords.clientY - lastPanY;
-            panX += dx;
-            panY += dy;
-            lastPanX = coords.clientX;
-            lastPanY = coords.clientY;
-        }
+        const bounds = getLevelBounds(currentLevel.switches, currentLevel.outputs);
+        const boundsWidth = bounds.maxX - bounds.minX;
+        const boundsHeight = bounds.maxY - bounds.minY;
+        zoom = Math.max(0.58, Math.min(1, (rect.width - 32) / boundsWidth, (rect.height - 32) / boundsHeight));
+        panX = (rect.width - boundsWidth * zoom) / 2 - bounds.minX * zoom;
+        panY = Math.max(12, (rect.height - boundsHeight * zoom) / 2 - bounds.minY * zoom);
     }
 
-    function handlePointerDown(e: MouseEvent | TouchEvent) {
-         if (showSidebar && gameArea && !e.composedPath().some(el => (el as HTMLElement).classList?.contains('sidebar'))) {
-            showSidebar = false;
+    function setZoom(nextZoom: number) {
+        const clamped = Math.max(0.5, Math.min(1.25, nextZoom));
+        if (!gameArea) {
+            zoom = clamped;
+            return;
         }
-        
-        // If clicking on background, start panning
-        if (e.target === gameArea || (e.target as Element).tagName === 'svg') {
-            selectedNode = null;
-            isPanning = true;
-            const coords = getCoords(e);
-            lastPanX = coords.clientX;
-            lastPanY = coords.clientY;
+        const rect = gameArea.getBoundingClientRect();
+        const center = {
+            x: (rect.width / 2 - panX) / zoom,
+            y: (rect.height / 2 - panY) / zoom,
+        };
+        zoom = clamped;
+        panX = rect.width / 2 - center.x * zoom;
+        panY = rect.height / 2 - center.y * zoom;
+    }
+
+    function getClientPoint(event: PointerEvent) {
+        return { x: event.clientX, y: event.clientY };
+    }
+
+    function getWorldPoint(event: PointerEvent) {
+        if (!gameArea) return { x: 0, y: 0 };
+        const rect = gameArea.getBoundingClientRect();
+        return {
+            x: (event.clientX - rect.left - panX) / zoom,
+            y: (event.clientY - rect.top - panY) / zoom,
+        };
+    }
+
+    function handleBoardPointerDown(event: PointerEvent) {
+        const target = event.target as HTMLElement;
+        if (target.closest('button,[role="button"]')) return;
+        selectedTerminal = null;
+        selectedConnectionId = null;
+        selectedGateId = null;
+        isPanning = true;
+        const point = getClientPoint(event);
+        lastPointerX = point.x;
+        lastPointerY = point.y;
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+        if (draggingGateId) {
+            event.preventDefault();
+            const point = getWorldPoint(event);
+            gates = gates.map((gate) =>
+                gate.id === draggingGateId
+                    ? { ...gate, x: point.x - dragOffsetX, y: point.y - dragOffsetY }
+                    : gate,
+            );
+            return;
+        }
+
+        if (isPanning) {
+            event.preventDefault();
+            panX += event.clientX - lastPointerX;
+            panY += event.clientY - lastPointerY;
+            lastPointerX = event.clientX;
+            lastPointerY = event.clientY;
         }
     }
 
     function handlePointerUp() {
         draggingGateId = null;
         isPanning = false;
-        
-        // Also handle end of pulse if mouse up anywhere
-        switches.forEach(s => {
-            if (s.type === 'pulse' && s.state) {
-                s.state = false;
-                updateCircuit();
-            }
-        });
+        releaseAllPulseSwitches();
     }
 
-    // Connection Logic
-    function handleSourceClick(id: string) {
-        if (selectedNode) {
-            if (selectedNode.type === 'sink') {
-                createConnection(id, selectedNode.id, selectedNode.index || 0);
-                selectedNode = null;
-            } else {
-                selectedNode = { id, type: 'source' };
-            }
-        } else {
-            selectedNode = { id, type: 'source' };
+    function addGate(type: GateType) {
+        if (!gameArea) return;
+        const rect = gameArea.getBoundingClientRect();
+        const id = crypto.randomUUID();
+        gates = [
+            ...gates,
+            {
+                id,
+                type,
+                x: (rect.width / 2 - panX) / zoom - GATE_WIDTH / 2,
+                y: (rect.height / 2 - panY) / zoom - GATE_HEIGHT / 2,
+            },
+        ];
+        selectedGateId = id;
+        invalidateValidation();
+        showSidebar = false;
+    }
+
+    function removeGate(id: string) {
+        gates = gates.filter((gate) => gate.id !== id);
+        connections = removeGateConnections(connections, id);
+        selectedGateId = null;
+        selectedTerminal = null;
+        invalidateValidation();
+    }
+
+    function startGateDrag(event: PointerEvent, gate: PlacedGate) {
+        if (event.button === 2) {
+            event.preventDefault();
+            removeGate(gate.id);
+            return;
         }
+
+        event.stopPropagation();
+        const point = getWorldPoint(event);
+        dragOffsetX = point.x - gate.x;
+        dragOffsetY = point.y - gate.y;
+        selectedGateId = gate.id;
+        selectedConnectionId = null;
+        draggingGateId = gate.id;
     }
 
-    function handleSinkClick(id: string, index: number) {
-        if (selectedNode) {
-            if (selectedNode.type === 'source') {
-                createConnection(selectedNode.id, id, index);
-                selectedNode = null;
-            } else {
-                selectedNode = { id, type: 'sink', index };
-            }
-        } else {
-            selectedNode = { id, type: 'sink', index };
+    function setSwitchState(id: string, value: boolean) {
+        switchStates = { ...switchStates, [id]: value };
+    }
+
+    function toggleSwitch(sw: BasicSwitch) {
+        if (sw.type !== 'toggle') return;
+        setSwitchState(sw.id, !switchStates[sw.id]);
+    }
+
+    function startPulse(sw: BasicSwitch) {
+        if (sw.type === 'pulse') setSwitchState(sw.id, true);
+    }
+
+    function endPulse(sw: BasicSwitch) {
+        if (sw.type === 'pulse') setSwitchState(sw.id, false);
+    }
+
+    function releaseAllPulseSwitches() {
+        const pulseIds = currentLevel.switches.filter((sw) => sw.type === 'pulse' && switchStates[sw.id]).map((sw) => sw.id);
+        if (pulseIds.length === 0) return;
+        switchStates = { ...switchStates, ...Object.fromEntries(pulseIds.map((id) => [id, false])) };
+    }
+
+    function tapTerminal(ref: TerminalRef) {
+        selectedConnectionId = null;
+        selectedGateId = null;
+
+        if (!selectedTerminal) {
+            selectedTerminal = ref;
+            return;
         }
-    }
 
-    function createConnection(fromId: string, toId: string, toInputIndex: number) {
-        if (fromId === toId) return;
-        // Remove existing connection to this input
-        connections = connections.filter(c => !(c.to === toId && c.toInputIndex === toInputIndex));
-        connections = [...connections, { from: fromId, to: toId, toInputIndex }];
-        updateCircuit();
-    }
-
-    // Helpers for rendering connections
-    // Helper to snap to grid if needed, or just return pos
-    function getConnectorPos(id: string, isInput: boolean, index: number = 0): { x: number, y: number } {
-        const sw = switches.find(s => s.id === id);
-        if (sw) return { x: sw.x + 90, y: sw.y + 20 }; // Switch output
-
-        const out = outputs.find(o => o.id === id);
-        if (out) return { x: out.x - 10, y: out.y + 25 }; // Output input
-
-        const gate = gates.find(g => g.id === id);
-        if (gate) {
-            if (isInput) {
-                if (gate.type === 'NOT') return { x: gate.x + 15, y: gate.y + 30 };
-                return { x: gate.x + 10, y: gate.y + (index === 0 ? 15 : 45) };
-            } else {
-                 const hasBubble = ['NOT', 'NAND', 'NOR'].includes(gate.type);
-                 let offsetX = 60;
-                 if (hasBubble) offsetX = 68;
-                 else if (gate.type === 'XOR') offsetX = 62;
-                 return { x: gate.x + offsetX, y: gate.y + 30 };
-            }
+        if (sameTerminal(selectedTerminal, ref)) {
+            selectedTerminal = null;
+            return;
         }
-        return { x: 0, y: 0 };
+
+        if (canCreateConnection(selectedTerminal, ref, gates, connections)) {
+            connections = addOrReplaceConnection(connections, selectedTerminal, ref, gates);
+            selectedTerminal = null;
+            invalidateValidation();
+            return;
+        }
+
+        selectedTerminal = ref;
     }
-    
+
+    function terminalIsSelected(ref: TerminalRef) {
+        return selectedTerminal ? sameTerminal(selectedTerminal, ref) : false;
+    }
+
+    function terminalIsCompatible(ref: TerminalRef) {
+        return !selectedTerminal || canCreateConnection(selectedTerminal, ref, gates, connections);
+    }
+
+    function terminalClass(ref: TerminalRef) {
+        const selected = terminalIsSelected(ref);
+        const compatible = terminalIsCompatible(ref);
+        const base = ref.role === 'source' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-pink-500 bg-pink-50 text-pink-700';
+        if (selected) return `${base} ring-4 ring-sky-200`;
+        if (!compatible) return 'border-slate-200 bg-slate-100 text-slate-300 opacity-45';
+        return `${base} hover:scale-105`;
+    }
+
+    function sourceRef(nodeId: string): TerminalRef {
+        return { nodeId, role: 'source', index: 0 };
+    }
+
+    function sinkRef(nodeId: string, index = 0): TerminalRef {
+        return { nodeId, role: 'sink', index };
+    }
+
+    function terminalPosition(ref: TerminalRef) {
+        return getTerminalPosition(ref, gates, currentLevel.switches, currentLevel.outputs);
+    }
+
+    function removeSelectedConnection() {
+        if (!selectedConnectionId) return;
+        connections = connections.filter((connection) => connection.id !== selectedConnectionId);
+        selectedConnectionId = null;
+        invalidateValidation();
+    }
+
     function resetLevel() {
         loadLevel(currentLevelIndex);
     }
-    
-    function nextLevel() {
-        if (currentLevelIndex < levels.length - 1) {
-            currentLevelIndex++;
-        }
-    }
 
+    function nextLevel() {
+        if (currentLevelIndex < levels.length - 1) currentLevelIndex += 1;
+    }
 </script>
 
-<div class="flex flex-col h-[calc(100vh-80px)] bg-slate-50 relative overflow-hidden">
-    <!-- Header -->
-    <div class="bg-white border-b px-4 py-3 flex justify-between items-center shadow-sm z-10 sm:px-6 sm:py-4">
-        <div class="flex items-center gap-2">
-            <button class="md:hidden p-2 -ml-2 rounded-md text-gray-700 hover:bg-gray-100" onclick={() => showSidebar = !showSidebar}>
-                {#if showSidebar} <X size={24} /> {:else} <Menu size={24} /> {/if}
+<div class="flex h-[calc(100vh-80px)] flex-col overflow-hidden bg-slate-50">
+    <div class="z-20 flex items-center justify-between gap-3 border-b bg-white px-3 py-3 shadow-sm sm:px-5">
+        <div class="flex min-w-0 items-center gap-2">
+            <button
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100 md:hidden"
+                aria-label="Toggle components"
+                onclick={() => (showSidebar = !showSidebar)}>
+                {#if showSidebar}<X size={22} />{:else}<Menu size={22} />{/if}
             </button>
-            <div>
-                <h1 class="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    Level {currentLevel.id}: {currentLevel.title}
-                </h1>
-                <p class="text-gray-600 text-xs sm:text-sm">{currentLevel.description}</p>
+            <div class="min-w-0">
+                <h1 class="truncate text-lg font-black text-slate-900 sm:text-2xl">Level {currentLevel.id}: {currentLevel.title}</h1>
+                <p class="line-clamp-2 text-xs text-slate-600 sm:text-sm">
+                    {currentLevel.description} Validated {validatedRows.length}/{currentLevel.truthTable.length}.
+                </p>
             </div>
         </div>
-        <div class="flex gap-2">
-            <button class="btn bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 sm:px-4 sm:py-2 rounded-lg flex items-center gap-2 text-sm" onclick={resetLevel}>
-                <RefreshCw size={16} /> <span class="hidden sm:inline">Reset</span>
+        <div class="flex shrink-0 items-center gap-2">
+            <select
+                class="hidden rounded-md border border-slate-200 bg-white px-2 py-2 text-sm font-bold text-slate-700 sm:block"
+                bind:value={currentLevelIndex}
+                aria-label="Select level">
+                {#each levels as level, index}
+                    <option value={index}>Level {level.id}</option>
+                {/each}
+            </select>
+            <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300" aria-label="Reset level" onclick={resetLevel}>
+                <RefreshCw size={17} />
             </button>
-            {#if currentLevelIndex < levels.length - 1}
-                <button 
-                    class="btn px-3 py-1 sm:px-4 sm:py-2 rounded-lg flex items-center gap-2 text-sm transition-all duration-300 {isLevelComplete ? 'bg-green-600 hover:bg-green-700 text-white shadow-md animate-pulse' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}" 
-                    onclick={nextLevel}
-                    disabled={!isLevelComplete}
-                >
-                    <span class="hidden sm:inline">Next Level</span> <ArrowLeft class="rotate-180" size={16} />
-                </button>
-            {:else if isLevelComplete}
-                 <button class="btn bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 sm:px-4 sm:py-2 rounded-lg flex items-center gap-2 text-sm shadow-md" onclick={() => alert("You are a Logic Master!")}>
-                    <span class="hidden sm:inline">Finish</span> <CheckCircle size={16} />
-                </button>
-            {/if}
+            <button
+                type="button"
+                class={`inline-flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-black ${
+                    isLevelComplete ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-100 text-slate-400'
+                }`}
+                disabled={!isLevelComplete || currentLevelIndex === levels.length - 1}
+                onclick={nextLevel}>
+                <span class="hidden sm:inline">Next</span><ArrowRight size={17} />
+            </button>
         </div>
     </div>
 
-    <div class="flex-1 flex overflow-hidden">
-        <!-- Sidebar -->
-        <div 
-            class="{`sidebar w-48 bg-white border-r p-4 flex-col gap-4 overflow-y-auto z-20 shadow-inner 
-                    fixed h-full top-0 left-0 transition-transform duration-300 ease-in-out md:relative md:flex md:translate-x-0
-                    ${showSidebar ? 'flex translate-x-0' : 'hidden -translate-x-full'}`}"
-        >
-            <h3 class="font-bold text-gray-700 mb-2">Components</h3>
-            {#each currentLevel.availableGates as gateType}
-                <button 
-                    class="p-3 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all flex flex-col items-center gap-2 text-sm"
-                    onclick={() => addGate(gateType)}
-                >
-                    <div class="font-bold text-blue-600">{gateType}</div>
-                    <span class="text-xs text-gray-500">Gate</span>
-                </button>
-            {/each}
-            {#if currentLevel.availableGates.length === 0}
-                <div class="text-gray-400 text-sm text-center italic mt-4">No components needed for this level. Just connect the wires!</div>
-            {/if}
-        </div>
-
-        <!-- Canvas -->
-        <div 
-            class="flex-1 bg-slate-50 relative cursor-move overflow-hidden touch-none"
-            bind:this={gameArea}
-            onpointerdown={handlePointerDown}
-            onpointermove={updatePointerPos}
-            onpointerup={handlePointerUp}
-            onpointerleave={handlePointerUp}
-        >
-             <!-- Grid Background (Static or Moving? Moving gives better feel of infinite canvas) -->
-            <div class="absolute inset-0 opacity-10 pointer-events-none" 
-                 style="background-image: radial-gradient(#64748b 1px, transparent 1px); background-size: 20px 20px; background-position: {panX}px {panY}px;">
-            </div>
-            
-            <!-- Panning Container -->
-            <div style="transform: translate({panX}px, {panY}px); width: 100%; height: 100%; pointer-events: none;">
-
-            <!-- SVG Layer for Wires -->
-            <svg class="w-full h-full pointer-events-none absolute inset-0 overflow-visible">
-                <defs>
-                    <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
-                        <polygon points="0 0, 6 2, 0 4" fill="#94a3b8" />
-                    </marker>
-                    <filter id="glow">
-                        <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
-                        <feMerge>
-                            <feMergeNode in="coloredBlur"/>
-                            <feMergeNode in="SourceGraphic"/>
-                        </feMerge>
-                    </filter>
-                </defs>
-
-                {#each connections as conn}
-                    {@const fromPos = getConnectorPos(conn.from, false)}
-                    {@const toPos = getConnectorPos(conn.to, true, conn.toInputIndex)}
-                    {@const isActive = (switches.find(s=>s.id===conn.from)?.state) || (gateStates[conn.from])}
-                    
-                    <!-- Wire Glow -->
-                    {#if isActive}
-                         <path 
-                            d={`M ${fromPos.x} ${fromPos.y} C ${fromPos.x + 50} ${fromPos.y}, ${toPos.x - 50} ${toPos.y}, ${toPos.x} ${toPos.y}`}
-                            fill="none" 
-                            stroke="#60a5fa" 
-                            stroke-width="6"
-                            class="opacity-50"
-                            filter="url(#glow)"
-                        />
-                    {/if}
-
-                    <!-- Wire Line -->
-                    <path 
-                        d={`M ${fromPos.x} ${fromPos.y} C ${fromPos.x + 50} ${fromPos.y}, ${toPos.x - 50} ${toPos.y}, ${toPos.x} ${toPos.y}`}
-                        fill="none" 
-                        stroke={isActive ? "#3b82f6" : "#94a3b8"}
-                        stroke-width="3"
-                        marker-end={isActive ? "" : "url(#arrowhead)"}
-                    />
+    <div class="relative flex min-h-0 flex-1 overflow-hidden">
+        <aside
+            class={`sidebar absolute inset-y-0 left-0 z-30 w-52 border-r bg-white p-3 shadow-xl transition-transform md:relative md:block md:translate-x-0 md:shadow-none ${
+                showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+            }`}>
+            <h2 class="mb-3 text-sm font-black uppercase tracking-wide text-slate-500">Components</h2>
+            <div class="grid gap-2">
+                {#each currentLevel.availableGates as gateType}
+                    <button
+                        type="button"
+                        class="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3 text-left font-black text-slate-700 hover:border-blue-500 hover:bg-blue-50"
+                        onclick={() => addGate(gateType)}>
+                        Add {gateType}
+                    </button>
                 {/each}
-
-                <!-- Active Selection -->
-                {#if selectedNode}
-                    {@const pos = getConnectorPos(selectedNode.id, selectedNode.type === 'sink', selectedNode.index)}
-                    
-                    <!-- Highlight Ring (Subtle) -->
-                    <circle cx={pos.x} cy={pos.y} r="8" fill="none" stroke={selectedNode.type === 'source' ? '#3b82f6' : '#ec4899'} stroke-width="3" class="opacity-80" />
+                {#if currentLevel.availableGates.length === 0}
+                    <p class="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No gates needed. Connect the ports.</p>
                 {/if}
-            </svg>
-            
-            <!-- Components Layer -->
-            <div class="absolute inset-0 w-full h-full pointer-events-none">
-                <svg class="w-full h-full overflow-visible">
-                    {#each switches as sw (sw.id)}
-                         <SwitchComponent 
-                            label={sw.label}
-                            type={sw.type}
-                            x={sw.x}
-                            y={sw.y}
-                            state={sw.state}
-                            onToggle={() => startPulse(sw.id)}
-                            onOutputClick={() => handleSourceClick(sw.id)}
-                         />
-                    {/each}
+            </div>
+        </aside>
 
-                    {#each outputs as out (out.id)}
-                        <OutputComponent 
-                            label={out.label}
-                            x={out.x}
-                            y={out.y}
-                            state={out.state}
-                            onInputClick={() => handleSinkClick(out.id, 0)}
+        <div
+            class="relative min-w-0 flex-1 touch-none overflow-hidden bg-slate-50"
+            bind:this={gameArea}
+            onpointerdown={handleBoardPointerDown}
+            onpointermove={handlePointerMove}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerUp}
+            onpointerleave={handlePointerUp}
+            role="application">
+            <div
+                class="absolute inset-0 pointer-events-none opacity-20"
+                style="background-image: radial-gradient(#64748b 1px, transparent 1px); background-size: 20px 20px; background-position: {panX}px {panY}px;">
+            </div>
+
+            <div class="absolute left-0 top-0 h-[560px] w-[760px]" style="transform: translate({panX}px, {panY}px) scale({zoom}); transform-origin: 0 0;">
+                <svg class="absolute inset-0 h-full w-full overflow-visible">
+                    <defs>
+                        <filter id="wire-glow-basics">
+                            <feGaussianBlur stdDeviation="3" result="blur" />
+                            <feMerge>
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    {#each connections as connection}
+                        {@const from = terminalPosition(connection.from)}
+                        {@const to = terminalPosition(connection.to)}
+                        {@const active = switchStates[connection.from.nodeId] || gateStates[connection.from.nodeId]}
+                        <path
+                            d={getWirePath(from, to)}
+                            fill="none"
+                            stroke={selectedConnectionId === connection.id ? '#0f172a' : active ? '#2563eb' : '#94a3b8'}
+                            stroke-width={selectedConnectionId === connection.id ? '5' : '3'}
+                            filter={active ? 'url(#wire-glow-basics)' : ''}
                         />
-                    {/each}
-
-                    {#each gates as gate (gate.id)}
-                        <GateComponent 
-                            type={gate.type} 
-                            x={gate.x} 
-                            y={gate.y}
-                            state={gateStates[gate.id]}
-                            onPointerDown={(e: PointerEvent) => {
-                                 if(e.button === 2) { 
-                                    e.preventDefault();
-                                    removeGate(gate.id);
-                                    return;
-                                 }
-                                 const rect = (e.target as Element).closest('svg')?.getBoundingClientRect();
-                                 if(rect) {
-                                    const coords = getCoords(e);
-                                    dragOffsetX = coords.clientX - rect.left - gate.x;
-                                    dragOffsetY = coords.clientY - rect.top - gate.y;
-                                 }
-                                 draggingGateId = gate.id; 
+                        <path
+                            d={getWirePath(from, to)}
+                            fill="none"
+                            stroke="transparent"
+                            stroke-width="24"
+                            class="cursor-pointer"
+                            role="button"
+                            tabindex="0"
+                            aria-label="Select wire"
+                            onkeydown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    selectedConnectionId = connection.id;
+                                    selectedTerminal = null;
+                                    selectedGateId = null;
+                                }
                             }}
-                            onInputClick={(idx) => handleSinkClick(gate.id, idx)}
-                            onOutputClick={() => handleSourceClick(gate.id)}
+                            onclick={() => {
+                                selectedConnectionId = connection.id;
+                                selectedTerminal = null;
+                                selectedGateId = null;
+                            }}
                         />
                     {/each}
                 </svg>
+
+                {#each currentLevel.switches as sw}
+                    <div class="absolute" style="left: {sw.x}px; top: {sw.y}px; width: {PORT_WIDTH}px; height: {PORT_HEIGHT}px;">
+                        <button
+                            type="button"
+                            class={`flex h-full w-full flex-col items-center justify-center rounded-lg border-2 bg-white text-sm font-black shadow-sm ${
+                                switchStates[sw.id] ? 'border-blue-500 text-blue-700' : 'border-slate-300 text-slate-700'
+                            }`}
+                            onpointerdown={(event) => {
+                                event.stopPropagation();
+                                startPulse(sw);
+                            }}
+                            onpointerup={() => endPulse(sw)}
+                            onpointercancel={() => endPulse(sw)}
+                            onpointerleave={() => endPulse(sw)}
+                            onclick={() => toggleSwitch(sw)}
+                            aria-label={`${sw.label} ${switchStates[sw.id] ? 'on' : 'off'}`}>
+                            <span>{sw.label}</span>
+                            <span class="text-xs text-slate-500">{sw.type === 'pulse' ? 'PRESS' : switchStates[sw.id] ? 'ON' : 'OFF'}</span>
+                        </button>
+                    </div>
+                    {@const ref = sourceRef(sw.id)}
+                    {@const pos = terminalPosition(ref)}
+                    <button
+                        type="button"
+                        class={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-sm transition ${terminalClass(ref)}`}
+                        style="left: {pos.x}px; top: {pos.y}px;"
+                        aria-label={`${sw.label} output terminal`}
+                        onclick={() => tapTerminal(ref)}>
+                        <span class="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                    </button>
+                {/each}
+
+                {#each currentLevel.outputs as output}
+                    <div class="absolute" style="left: {output.x}px; top: {output.y}px; width: {PORT_WIDTH}px; height: {PORT_HEIGHT}px;">
+                        <div
+                            class={`flex h-full w-full flex-col items-center justify-center rounded-lg border-2 bg-white text-sm font-black shadow-sm ${
+                                outputStates[output.id] ? 'border-amber-400 text-amber-700 shadow-amber-100' : 'border-slate-300 text-slate-700'
+                            }`}>
+                            <Zap class={outputStates[output.id] ? 'text-amber-500' : 'text-slate-300'} size={18} />
+                            <span>{output.label}</span>
+                        </div>
+                    </div>
+                    {@const ref = sinkRef(output.id)}
+                    {@const pos = terminalPosition(ref)}
+                    <button
+                        type="button"
+                        class={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-sm transition ${terminalClass(ref)}`}
+                        style="left: {pos.x}px; top: {pos.y}px;"
+                        aria-label={`${output.label} input terminal`}
+                        onclick={() => tapTerminal(ref)}>
+                        <span class="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                    </button>
+                {/each}
+
+                {#each gates as gate (gate.id)}
+                    <div
+                        class={`absolute cursor-grab rounded-lg p-1 active:cursor-grabbing ${selectedGateId === gate.id ? 'ring-4 ring-sky-200' : ''}`}
+                        style="left: {gate.x}px; top: {gate.y}px; width: {GATE_WIDTH}px; height: {GATE_HEIGHT}px;"
+                        onpointerdown={(event) => startGateDrag(event, gate)}
+                        oncontextmenu={(event) => event.preventDefault()}
+                        role="button"
+                        tabindex="0"
+                        aria-label={`${gate.type} gate`}>
+                        <GateShape type={gate.type} active={gateStates[gate.id]} />
+                    </div>
+                    {#each Array.from({ length: getGateInputCount(gate.type) }) as _, index}
+                        {@const ref = sinkRef(gate.id, index)}
+                        {@const pos = terminalPosition(ref)}
+                        <button
+                            type="button"
+                            class={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-sm transition ${terminalClass(ref)}`}
+                            style="left: {pos.x}px; top: {pos.y}px;"
+                            aria-label={`${gate.type} input ${index + 1}`}
+                            onclick={() => tapTerminal(ref)}>
+                            <span class="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                        </button>
+                    {/each}
+                    {@const ref = sourceRef(gate.id)}
+                    {@const pos = terminalPosition(ref)}
+                    <button
+                        type="button"
+                        class={`absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 shadow-sm transition ${terminalClass(ref)}`}
+                        style="left: {pos.x}px; top: {pos.y}px;"
+                        aria-label={`${gate.type} output`}
+                        onclick={() => tapTerminal(ref)}>
+                        <span class="h-2 w-2 rounded-full bg-current opacity-70"></span>
+                    </button>
+                {/each}
+
+                {#if selectedGateId}
+                    {@const gate = gates.find((candidate) => candidate.id === selectedGateId)}
+                    {#if gate}
+                        <button
+                            type="button"
+                            class="absolute inline-flex h-10 items-center gap-2 rounded-md bg-red-600 px-3 text-sm font-black text-white shadow-lg hover:bg-red-700"
+                            style="left: {gate.x}px; top: {gate.y - 48}px;"
+                            onclick={() => removeGate(gate.id)}>
+                            <Trash2 size={16} /> Gate
+                        </button>
+                    {/if}
+                {/if}
+
+                {#if selectedConnectionId}
+                    {@const connection = connections.find((candidate) => candidate.id === selectedConnectionId)}
+                    {#if connection}
+                        {@const from = terminalPosition(connection.from)}
+                        {@const to = terminalPosition(connection.to)}
+                        <button
+                            type="button"
+                            class="absolute inline-flex h-10 items-center gap-2 rounded-md bg-red-600 px-3 text-sm font-black text-white shadow-lg hover:bg-red-700"
+                            style="left: {(from.x + to.x) / 2 - 48}px; top: {(from.y + to.y) / 2 - 48}px;"
+                            onclick={removeSelectedConnection}>
+                            <Trash2 size={16} /> Wire
+                        </button>
+                    {/if}
+                {/if}
             </div>
-            
-            </div> <!-- End Panning Container -->
+
+            {#if selectedTerminal}
+                <div class="absolute bottom-3 left-3 right-3 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-md sm:left-auto sm:right-3 sm:w-80">
+                    Select a compatible {selectedTerminal.role === 'source' ? 'input' : 'output'} terminal to connect, or tap the board to cancel.
+                </div>
+            {/if}
+
+            {#if isLevelComplete}
+                <div class="pointer-events-none absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-full border-2 border-emerald-500 bg-emerald-50 px-5 py-2 font-black text-emerald-700 shadow-lg">
+                    <CheckCircle class="mr-2 inline-block" size={18} /> Level Complete
+                </div>
+            {/if}
+            <div class="absolute right-3 top-3 z-20 flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                <button type="button" class="h-9 w-9 text-lg font-black text-slate-700 hover:bg-slate-50" aria-label="Zoom out" onclick={() => setZoom(zoom - 0.12)}>-</button>
+                <div class="min-w-12 border-x border-slate-200 px-2 text-center text-xs font-black text-slate-600">{Math.round(zoom * 100)}%</div>
+                <button type="button" class="h-9 w-9 text-lg font-black text-slate-700 hover:bg-slate-50" aria-label="Zoom in" onclick={() => setZoom(zoom + 0.12)}>+</button>
+            </div>
         </div>
     </div>
 
-    <!-- Visual Celebration (Non-blocking) -->
-    {#if isLevelComplete}
-        <div class="absolute top-20 left-1/2 transform -translate-x-1/2 pointer-events-none z-30">
-            <div class="bg-green-100 border-2 border-green-500 text-green-700 px-6 py-2 rounded-full shadow-lg flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-500">
-                <CheckCircle size={20} />
-                <span class="font-bold">Level Complete!</span>
-            </div>
-        </div>
-    {/if}
+    <div class="grid grid-cols-2 gap-2 border-t bg-white p-2 md:hidden">
+        {#each currentLevel.availableGates as gateType}
+            <button type="button" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-black text-slate-700" onclick={() => addGate(gateType)}>
+                Add {gateType}
+            </button>
+        {/each}
+        {#if currentLevel.availableGates.length === 0}
+            <div class="col-span-2 rounded-lg bg-slate-50 px-3 py-3 text-center text-sm font-bold text-slate-500">Connect the ports to solve this level.</div>
+        {/if}
+    </div>
 </div>
