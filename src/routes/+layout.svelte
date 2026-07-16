@@ -26,30 +26,30 @@
 </svelte:head>
 
 <div class="min-h-screen flex flex-col">
-	<header class="bg-blue-600 text-white p-4 shadow-md">
+	<header class="bg-blue-600 text-white px-3 py-2 shadow-sm">
 		<div class="container mx-auto flex justify-between items-center">
-			<div class="flex items-center gap-4">
+			<div class="flex items-center gap-2 min-w-0">
                 {#if $pageTitle !== 'Brain Playground'}
-                    <a href="{base}/" class="p-1 hover:bg-blue-700 rounded-full transition-colors" aria-label="Back to Home">
-                        <ArrowLeft size={28} />
+                    <a href="{base}/" class="p-1 hover:bg-blue-700 rounded-md transition-colors shrink-0" aria-label="Back to Home">
+                        <ArrowLeft size={22} />
                     </a>
                 {:else}
-                    <div class="p-1">
-                        <Gamepad2 size={28} />
+                    <div class="p-1 shrink-0">
+                        <Gamepad2 size={22} />
                     </div>
                 {/if}
-                <span class="text-2xl font-bold">{$pageTitle}</span>
+                <span class="truncate text-lg sm:text-xl font-bold">{$pageTitle}</span>
             </div>
 			<nav>
                 <!-- Place for global settings or links -->
-                <a href="{base}/settings" class="p-2 hover:bg-blue-700 rounded-full inline-block text-white" aria-label="Settings">
-                    <Settings size={20} />
+                <a href="{base}/settings" class="p-1.5 hover:bg-blue-700 rounded-md inline-block text-white" aria-label="Settings">
+                    <Settings size={18} />
                 </a>
 			</nav>
 		</div>
 	</header>
 
-	<main class="flex-grow container mx-auto p-4">
+	<main class="flex-grow container mx-auto p-3 sm:p-4">
 		{@render children()}
 	</main>
 
