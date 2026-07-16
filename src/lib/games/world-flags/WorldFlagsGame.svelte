@@ -55,6 +55,8 @@
     let livesEnabled = $state(false);
     let livesRemaining = $state(3);
     let mistakes = $state(0);
+    let correctAnswers = $state(0);
+    let selectedChoiceCode: string | null = $state(null);
     let celebration: { points: number } | null = $state(null);
     let saveState: SaveState = $state(structuredClone(defaultSave));
     let speechSupported = $state(false);
@@ -100,6 +102,7 @@
         level = 1;
         livesRemaining = livesEnabled ? 3 : 0;
         mistakes = 0;
+        correctAnswers = 0;
         recentIds = [];
         phase = "playing";
         nextQuestion();
@@ -117,14 +120,19 @@
         choiceOptions = mode === "choice" ? buildChoiceOptions(currentCountry, nextPool, difficulty, level) : [];
         answer = "";
         feedback = null;
+        selectedChoiceCode = null;
         hintPenalty = 0;
         revealedHints = [];
         speechMessage = "";
+        if (typeof document !== "undefined") {
+            (document.activeElement as HTMLElement | null)?.blur();
+        }
     }
 
     function markCorrect(basePoints: number) {
         const earned = Math.max(1, basePoints + streak * 2 + (currentCountry?.tier ?? 1) - hintPenalty);
         score += earned;
+        correctAnswers += 1;
         streak += 1;
         bestRunStreak = Math.max(bestRunStreak, streak);
         level = Math.max(level, Math.floor(streak / 3) + 1);
@@ -167,7 +175,7 @@
     }
 
     function checkTextAnswer() {
-        if (!currentCountry || feedback === "correct") return;
+        if (!currentCountry || feedback) return;
         if (isCorrectCountryAnswer(answer, currentCountry)) {
             markCorrect(12);
         } else {
@@ -177,6 +185,7 @@
 
     function chooseFlag(country: Country) {
         if (!currentCountry || feedback) return;
+        selectedChoiceCode = country.code;
         if (country.code === currentCountry.code) {
             markCorrect(difficulty === "hard" ? 16 : difficulty === "normal" ? 13 : 10);
         } else {
@@ -430,9 +439,11 @@
                                     class={`rounded-lg border-2 bg-white p-2 transition-all ${
                                         feedback && option.code === currentCountry?.code
                                             ? "border-emerald-500 bg-emerald-50"
+                                            : feedback && selectedChoiceCode === option.code
+                                              ? "border-red-500 bg-red-50"
                                             : feedback
                                               ? "border-slate-200 opacity-60"
-                                              : "border-slate-200 hover:border-sky-400"
+                                              : "border-slate-200 hover:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
                                     }`}>
                                     <img class="aspect-[3/2] w-full rounded-md object-cover shadow-sm" src={flagUrl(option, base)} alt={`Bandera de ${option.name}`} />
                                 </button>
@@ -471,14 +482,14 @@
                                     <div class="flex gap-2">
                                         <input
                                             bind:value={answer}
-                                            onkeydown={(event) => event.key === "Enter" && checkTextAnswer()}
+                                            onkeydown={(event) => event.key === "Enter" && !feedback && checkTextAnswer()}
                                             class="min-w-0 flex-1 rounded-lg border-2 border-slate-200 px-4 py-3 text-lg font-bold outline-none focus:border-sky-500"
                                             placeholder="Nombre del pais"
                                             autocomplete="off" />
                                         <button
                                             type="button"
                                             onclick={startListening}
-                                            disabled={!speechSupported || isListening}
+                                            disabled={!speechSupported || isListening || Boolean(feedback)}
                                             class="rounded-lg border-2 border-slate-200 px-4 text-slate-700 disabled:opacity-40"
                                             aria-label="Responder con microfono">
                                             <Mic class={isListening ? "text-red-500" : ""} size={22} />
@@ -487,7 +498,11 @@
                                     {#if speechMessage}
                                         <div class="text-sm font-bold text-slate-500">{speechMessage}</div>
                                     {/if}
-                                    <button type="button" onclick={checkTextAnswer} class="rounded-lg bg-sky-600 px-4 py-3 text-lg font-black text-white">
+                                    <button
+                                        type="button"
+                                        onclick={checkTextAnswer}
+                                        disabled={Boolean(feedback)}
+                                        class="rounded-lg bg-sky-600 px-4 py-3 text-lg font-black text-white disabled:bg-slate-300 disabled:text-slate-500">
                                         Comprobar
                                     </button>
                                 </div>
@@ -540,8 +555,8 @@
                     <span class="text-3xl font-black text-slate-900">{bestRunStreak}</span>
                 </div>
                 <div class="rounded-lg bg-slate-50 p-4">
-                    <span class="block text-xs font-black uppercase tracking-wider text-slate-500">Fallos</span>
-                    <span class="text-3xl font-black text-slate-900">{mistakes}</span>
+                    <span class="block text-xs font-black uppercase tracking-wider text-slate-500">Aciertos</span>
+                    <span class="text-3xl font-black text-slate-900">{correctAnswers}</span>
                 </div>
                 <div class="rounded-lg bg-slate-50 p-4">
                     <span class="block text-xs font-black uppercase tracking-wider text-slate-500">Nivel</span>

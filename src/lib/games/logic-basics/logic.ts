@@ -1,162 +1,256 @@
-import type { GateType, Gate, Switch, Output, Connection, Level } from './types';
+import { evaluateCircuit as evaluateSharedCircuit, evaluateGate } from '../logic-circuits/engine';
+import type { Connection, PlacedGate } from '../logic-circuits/types';
+import type { BasicLevel } from './types';
 
-export function evaluateGate(type: GateType, inputs: boolean[]): boolean {
-    switch (type) {
-        case 'AND': return inputs.every(i => i);
-        case 'OR': return inputs.some(i => i);
-        case 'NOT': return !inputs[0];
-        case 'NAND': return !inputs.every(i => i);
-        case 'NOR': return !inputs.some(i => i);
-        case 'XOR': return inputs.reduce((a, b) => a !== b, false);
-        default: return false;
-    }
+export { evaluateGate };
+
+export function evaluateCircuit(level: BasicLevel, gates: PlacedGate[], connections: Connection[], switchValues: Record<string, boolean>) {
+    return evaluateSharedCircuit({ inputs: level.switches, outputs: level.outputs }, gates, connections, switchValues);
 }
 
-export function evaluateCircuit(
-    gates: Gate[],
-    switches: Switch[],
-    outputs: Output[],
-    connections: Connection[]
-): { gateStates: Record<string, boolean>; outputStates: Record<string, boolean> } {
-    const values: Record<string, boolean> = {};
+const x = {
+    input: 40,
+    output: 380,
+};
 
-    // 1. Initialize values from switches
-    switches.forEach(s => {
-        values[s.id] = s.state;
-    });
-
-    // 2. Propagate signals iteratively
-    let changed = true;
-    let iterations = 0;
-    const MAX_ITERATIONS = 50;
-
-    // Initialize gate outputs to false initially if unknown
-    gates.forEach(g => {
-        if (values[g.id] === undefined) values[g.id] = false;
-    });
-
-    while (changed && iterations < MAX_ITERATIONS) {
-        changed = false;
-        iterations++;
-
-        gates.forEach(gate => {
-            const gateInputs: boolean[] = [];
-            const inputCount = gate.type === 'NOT' ? 1 : 2;
-
-            for (let i = 0; i < inputCount; i++) {
-                const conn = connections.find(c => c.to === gate.id && c.toInputIndex === i);
-                if (conn && values[conn.from] !== undefined) {
-                    gateInputs.push(values[conn.from]);
-                } else {
-                    gateInputs.push(false);
-                }
-            }
-
-            const newValue = evaluateGate(gate.type, gateInputs);
-            if (values[gate.id] !== newValue) {
-                values[gate.id] = newValue;
-                changed = true;
-            }
-        });
-    }
-
-    // 3. Determine Output states
-    const newOutputStates: Record<string, boolean> = {};
-    outputs.forEach(out => {
-        const conn = connections.find(c => c.to === out.id);
-        if (conn && values[conn.from] !== undefined) {
-            newOutputStates[out.id] = values[conn.from];
-        } else {
-            newOutputStates[out.id] = false;
-        }
-    });
-
-    return {
-        gateStates: values,
-        outputStates: newOutputStates
-    };
-}
-
-export const levels: Level[] = [
+export const levels: BasicLevel[] = [
     {
         id: 1,
-        title: "Power On",
-        description: "Connect the switch to the light bulb to turn it on.",
-        switches: [{ id: 'sw1', label: 'Power', type: 'toggle', x: 30, y: 150 }],
-        outputs: [{ id: 'out1', label: 'Lamp', x: 320, y: 150 }],
+        title: 'Power On',
+        description: 'Connect the power switch to the lamp.',
+        switches: [{ id: 'power', label: 'Power', type: 'toggle', x: x.input, y: 150 }],
+        outputs: [{ id: 'lamp', label: 'Lamp', x: x.output, y: 150, kind: 'lamp' }],
         availableGates: [],
-        goal: (switches, outputs) => outputs.find(o => o.id === 'out1')?.state === true
+        truthTable: [
+            { inputs: [false], outputs: [false] },
+            { inputs: [true], outputs: [true] },
+        ],
     },
     {
         id: 2,
-        title: "Door Bell",
-        description: "Use the push button to ring the bell (light the lamp).",
-        switches: [{ id: 'btn1', label: 'Bell', type: 'pulse', x: 30, y: 150 }],
-        outputs: [{ id: 'out1', label: 'Bell', x: 320, y: 150 }],
+        title: 'Door Bell',
+        description: 'Use a push button to ring the bell only while it is pressed.',
+        switches: [{ id: 'button', label: 'Button', type: 'pulse', x: x.input, y: 150 }],
+        outputs: [{ id: 'bell', label: 'Bell', x: x.output, y: 150, kind: 'bell' }],
         availableGates: [],
-        goal: (switches, outputs) => outputs.find(o => o.id === 'out1')?.state === true
+        truthTable: [
+            { inputs: [false], outputs: [false] },
+            { inputs: [true], outputs: [true] },
+        ],
     },
     {
         id: 3,
-        title: "The Inverter",
-        description: "Turn the light ON when the switch is OFF.",
-        switches: [{ id: 'sw1', label: 'Input', type: 'toggle', x: 30, y: 150 }],
-        outputs: [{ id: 'out1', label: 'Result', x: 320, y: 150 }],
+        title: 'The Inverter',
+        description: 'Turn the lamp on when the switch is off.',
+        switches: [{ id: 'input', label: 'Input', type: 'toggle', x: x.input, y: 150 }],
+        outputs: [{ id: 'result', label: 'Result', x: x.output, y: 150, kind: 'lamp' }],
         availableGates: ['NOT'],
-        goal: (switches, outputs) => {
-            const sw = switches.find(s => s.id === 'sw1');
-            const out = outputs.find(o => o.id === 'out1');
-            return sw?.state === false && out?.state === true;
-        }
+        truthTable: [
+            { inputs: [false], outputs: [true] },
+            { inputs: [true], outputs: [false] },
+        ],
     },
     {
         id: 4,
-        title: "Safety Lock (AND)",
-        description: "Both switches must be ON to activate the machine.",
+        title: 'Safety Lock',
+        description: 'Both keys must be on to activate the machine.',
         switches: [
-            { id: 'sw1', label: 'Key 1', type: 'toggle', x: 30, y: 100 },
-            { id: 'sw2', label: 'Key 2', type: 'toggle', x: 30, y: 200 }
+            { id: 'key-a', label: 'Key A', type: 'toggle', x: x.input, y: 110 },
+            { id: 'key-b', label: 'Key B', type: 'toggle', x: x.input, y: 210 },
         ],
-        outputs: [{ id: 'out1', label: 'Machine', x: 320, y: 150 }],
+        outputs: [{ id: 'machine', label: 'Machine', x: x.output, y: 160, kind: 'indicator' }],
         availableGates: ['AND'],
-        goal: (switches, outputs) => {
-            const s1 = switches.find(s => s.id === 'sw1')?.state;
-            const s2 = switches.find(s => s.id === 'sw2')?.state;
-            const out = outputs.find(o => o.id === 'out1')?.state;
-            return s1 === true && s2 === true && out === true;
-        }
+        truthTable: [
+            { inputs: [false, false], outputs: [false] },
+            { inputs: [false, true], outputs: [false] },
+            { inputs: [true, false], outputs: [false] },
+            { inputs: [true, true], outputs: [true] },
+        ],
     },
     {
         id: 5,
-        title: "Emergency Override (OR)",
-        description: "Turn on the alarm if EITHER sensor is active.",
+        title: 'Emergency Override',
+        description: 'Turn on the alarm if either sensor is active.',
         switches: [
-            { id: 'sw1', label: 'Sensor A', type: 'toggle', x: 30, y: 100 },
-            { id: 'sw2', label: 'Sensor B', type: 'toggle', x: 30, y: 200 }
+            { id: 'sensor-a', label: 'Sensor A', type: 'toggle', x: x.input, y: 110 },
+            { id: 'sensor-b', label: 'Sensor B', type: 'toggle', x: x.input, y: 210 },
         ],
-        outputs: [{ id: 'out1', label: 'Alarm', x: 320, y: 150 }],
+        outputs: [{ id: 'alarm', label: 'Alarm', x: x.output, y: 160, kind: 'indicator' }],
         availableGates: ['OR'],
-        goal: (switches, outputs) => {
-            // Success if we can demonstrate OR behavior (just turning it on once is usually enough for a simple game)
-            // But let's just say "Turn it on" is the goal.
-            return outputs.find(o => o.id === 'out1')?.state === true;
-        }
+        truthTable: [
+            { inputs: [false, false], outputs: [false] },
+            { inputs: [false, true], outputs: [true] },
+            { inputs: [true, false], outputs: [true] },
+            { inputs: [true, true], outputs: [true] },
+        ],
     },
     {
         id: 6,
-        title: "Exclusive Access (XOR)",
-        description: "The light should be ON only if the switches are DIFFERENT.",
+        title: 'Exclusive Access',
+        description: 'The light is on only when the switches are different.',
         switches: [
-            { id: 'sw1', label: 'A', type: 'toggle', x: 30, y: 100 },
-            { id: 'sw2', label: 'B', type: 'toggle', x: 30, y: 200 }
+            { id: 'a', label: 'A', type: 'toggle', x: x.input, y: 110 },
+            { id: 'b', label: 'B', type: 'toggle', x: x.input, y: 210 },
         ],
-        outputs: [{ id: 'out1', label: 'Light', x: 320, y: 150 }],
+        outputs: [{ id: 'light', label: 'Light', x: x.output, y: 160, kind: 'lamp' }],
         availableGates: ['XOR'],
-        goal: (switches, outputs) => {
-             const s1 = switches.find(s => s.id === 'sw1')?.state;
-             const s2 = switches.find(s => s.id === 'sw2')?.state;
-             const out = outputs.find(o => o.id === 'out1')?.state;
-             return s1 !== s2 && out === true;
-        }
-    }
+        truthTable: [
+            { inputs: [false, false], outputs: [false] },
+            { inputs: [false, true], outputs: [true] },
+            { inputs: [true, false], outputs: [true] },
+            { inputs: [true, true], outputs: [false] },
+        ],
+    },
+    {
+        id: 7,
+        title: 'Quiet Room',
+        description: 'The quiet light is on only when both noise sensors are off.',
+        switches: [
+            { id: 'noise-a', label: 'Noise A', type: 'toggle', x: x.input, y: 110 },
+            { id: 'noise-b', label: 'Noise B', type: 'toggle', x: x.input, y: 210 },
+        ],
+        outputs: [{ id: 'quiet', label: 'Quiet', x: x.output, y: 160, kind: 'lamp' }],
+        availableGates: ['NOR'],
+        truthTable: [
+            { inputs: [false, false], outputs: [true] },
+            { inputs: [false, true], outputs: [false] },
+            { inputs: [true, false], outputs: [false] },
+            { inputs: [true, true], outputs: [false] },
+        ],
+    },
+    {
+        id: 8,
+        title: 'Fail-Safe Alarm',
+        description: 'The alarm is off only when both safety checks are active.',
+        switches: [
+            { id: 'safe-a', label: 'Safe A', type: 'toggle', x: x.input, y: 110 },
+            { id: 'safe-b', label: 'Safe B', type: 'toggle', x: x.input, y: 210 },
+        ],
+        outputs: [{ id: 'alarm', label: 'Alarm', x: x.output, y: 160, kind: 'indicator' }],
+        availableGates: ['NAND'],
+        truthTable: [
+            { inputs: [false, false], outputs: [true] },
+            { inputs: [false, true], outputs: [true] },
+            { inputs: [true, false], outputs: [true] },
+            { inputs: [true, true], outputs: [false] },
+        ],
+    },
+    {
+        id: 9,
+        title: 'Enable Button',
+        description: 'The motor runs only while the button is pressed and the key is enabled.',
+        switches: [
+            { id: 'key', label: 'Key', type: 'toggle', x: x.input, y: 110 },
+            { id: 'button', label: 'Button', type: 'pulse', x: x.input, y: 210 },
+        ],
+        outputs: [{ id: 'motor', label: 'Motor', x: x.output, y: 160, kind: 'indicator' }],
+        availableGates: ['AND'],
+        truthTable: [
+            { inputs: [false, false], outputs: [false] },
+            { inputs: [false, true], outputs: [false] },
+            { inputs: [true, false], outputs: [false] },
+            { inputs: [true, true], outputs: [true] },
+        ],
+    },
+    {
+        id: 10,
+        title: 'Night Light',
+        description: 'The lamp turns on only when enabled and daylight is off.',
+        switches: [
+            { id: 'enabled', label: 'Enabled', type: 'toggle', x: x.input, y: 100 },
+            { id: 'daylight', label: 'Daylight', type: 'toggle', x: x.input, y: 220 },
+        ],
+        outputs: [{ id: 'lamp', label: 'Lamp', x: x.output, y: 160, kind: 'lamp' }],
+        availableGates: ['AND', 'NOT'],
+        truthTable: [
+            { inputs: [false, false], outputs: [false] },
+            { inputs: [false, true], outputs: [false] },
+            { inputs: [true, false], outputs: [true] },
+            { inputs: [true, true], outputs: [false] },
+        ],
+    },
+    {
+        id: 11,
+        title: 'Armed Doors',
+        description: 'Trigger the alarm when armed and either door is open.',
+        switches: [
+            { id: 'armed', label: 'Armed', type: 'toggle', x: x.input, y: 80 },
+            { id: 'front', label: 'Front', type: 'toggle', x: x.input, y: 170 },
+            { id: 'rear', label: 'Rear', type: 'toggle', x: x.input, y: 260 },
+        ],
+        outputs: [{ id: 'alarm', label: 'Alarm', x: x.output, y: 170, kind: 'indicator' }],
+        availableGates: ['AND', 'OR'],
+        truthTable: [
+            { inputs: [false, false, false], outputs: [false] },
+            { inputs: [false, false, true], outputs: [false] },
+            { inputs: [false, true, false], outputs: [false] },
+            { inputs: [false, true, true], outputs: [false] },
+            { inputs: [true, false, false], outputs: [false] },
+            { inputs: [true, false, true], outputs: [true] },
+            { inputs: [true, true, false], outputs: [true] },
+            { inputs: [true, true, true], outputs: [true] },
+        ],
+    },
+    {
+        id: 12,
+        title: 'Safe / Unsafe Panel',
+        description: 'Show green when both checks pass and red otherwise.',
+        switches: [
+            { id: 'check-a', label: 'Check A', type: 'toggle', x: x.input, y: 110 },
+            { id: 'check-b', label: 'Check B', type: 'toggle', x: x.input, y: 210 },
+        ],
+        outputs: [
+            { id: 'safe', label: 'Safe', x: x.output, y: 110, kind: 'indicator' },
+            { id: 'unsafe', label: 'Unsafe', x: x.output, y: 210, kind: 'indicator' },
+        ],
+        availableGates: ['AND', 'NOT'],
+        truthTable: [
+            { inputs: [false, false], outputs: [false, true] },
+            { inputs: [false, true], outputs: [false, true] },
+            { inputs: [true, false], outputs: [false, true] },
+            { inputs: [true, true], outputs: [true, false] },
+        ],
+    },
+    {
+        id: 13,
+        title: 'Simple Security Panel',
+        description: 'Sound the alarm when armed and a window or door is open.',
+        switches: [
+            { id: 'armed', label: 'Armed', type: 'toggle', x: x.input, y: 80 },
+            { id: 'window', label: 'Window', type: 'toggle', x: x.input, y: 170 },
+            { id: 'door', label: 'Door', type: 'toggle', x: x.input, y: 260 },
+        ],
+        outputs: [{ id: 'alarm', label: 'Alarm', x: x.output, y: 170, kind: 'indicator' }],
+        availableGates: ['AND', 'OR'],
+        truthTable: [
+            { inputs: [false, false, false], outputs: [false] },
+            { inputs: [false, false, true], outputs: [false] },
+            { inputs: [false, true, false], outputs: [false] },
+            { inputs: [false, true, true], outputs: [false] },
+            { inputs: [true, false, false], outputs: [false] },
+            { inputs: [true, false, true], outputs: [true] },
+            { inputs: [true, true, false], outputs: [true] },
+            { inputs: [true, true, true], outputs: [true] },
+        ],
+    },
+    {
+        id: 14,
+        title: 'Dual Indicator Challenge',
+        description: 'Light A for exactly one active sensor and B for both active.',
+        switches: [
+            { id: 'sensor-a', label: 'Sensor A', type: 'toggle', x: x.input, y: 110 },
+            { id: 'sensor-b', label: 'Sensor B', type: 'toggle', x: x.input, y: 210 },
+        ],
+        outputs: [
+            { id: 'exactly-one', label: 'A', x: x.output, y: 110, kind: 'indicator' },
+            { id: 'both', label: 'B', x: x.output, y: 210, kind: 'indicator' },
+        ],
+        availableGates: ['AND', 'XOR'],
+        truthTable: [
+            { inputs: [false, false], outputs: [false, false] },
+            { inputs: [false, true], outputs: [true, false] },
+            { inputs: [true, false], outputs: [true, false] },
+            { inputs: [true, true], outputs: [false, true] },
+        ],
+    },
 ];
