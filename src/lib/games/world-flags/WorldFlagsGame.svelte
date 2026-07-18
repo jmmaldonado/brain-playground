@@ -420,22 +420,14 @@
                     {#if mode === "choice"}
                         <div class="mb-4 text-center">
                             <div class="text-sm font-black uppercase tracking-wider text-slate-500">Elige la bandera de</div>
-                            <div class="flex items-center justify-center gap-3">
-                                <h2 class="text-3xl sm:text-5xl font-black text-slate-900">{currentCountry.name}</h2>
-                                <button
-                                    type="button"
-                                    onclick={() => (showHintModal = true)}
-                                    class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                                    aria-label="Abrir pistas">
-                                    <HelpCircle size={22} />
-                                </button>
-                            </div>
+                            <h2 class="text-3xl sm:text-5xl font-black text-slate-900">{currentCountry.name}</h2>
                         </div>
                         <div class="mx-auto grid max-w-3xl grid-cols-2 gap-3">
-                            {#each choiceOptions as option}
+                            {#each choiceOptions as option, index}
                                 <button
                                     type="button"
                                     onclick={() => chooseFlag(option)}
+                                    aria-label={`Opcion ${index + 1}`}
                                     class={`rounded-lg border-2 bg-white p-2 transition-all ${
                                         feedback && option.code === currentCountry?.code
                                             ? "border-emerald-500 bg-emerald-50"
@@ -445,7 +437,7 @@
                                               ? "border-slate-200 opacity-60"
                                               : "border-slate-200 hover:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
                                     }`}>
-                                    <img class="aspect-[3/2] w-full rounded-md object-cover shadow-sm" src={flagUrl(option, base)} alt={`Bandera de ${option.name}`} />
+                                    <img class="aspect-[3/2] w-full rounded-md object-cover shadow-sm" src={flagUrl(option, base)} alt="" />
                                 </button>
                             {/each}
                         </div>
@@ -581,7 +573,7 @@
         </section>
     {/if}
 
-    {#if showHintModal && currentCountry}
+    {#if showHintModal && currentCountry && mode !== "choice"}
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
             <div class="w-full max-w-md rounded-lg bg-white p-4 shadow-xl">
                 <div class="mb-4 flex items-center justify-between gap-3">

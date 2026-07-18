@@ -19,11 +19,12 @@ Add a geography game that helps players learn world flags while fitting the exis
 - In written/speech mode, an incorrect answer locks the check action until the next country so the revealed answer cannot be copied back into the input.
 - Lives-mode results show correct answers instead of mistakes.
 - Four-flag choice selection is cleared when moving to the next country so the previous button does not remain visually selected.
-- Hints in challenge modes:
+- Hints in written challenge mode:
   - Continent.
   - First letter.
   - First three letters.
   - Hints are shown from a contextual modal and apply different score penalties.
+- Four-flag choice mode does not show the hints modal and uses non-revealing accessible labels for flag options.
 - Progressive levels:
   - Early levels prioritize larger or more globally recognizable countries.
   - Later levels include less common countries.
